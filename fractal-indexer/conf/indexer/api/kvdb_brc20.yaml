@@ -1,0 +1,9 @@
+addrs: ["pika-brc20:9221"] 
+database: 0
+password: ""
+
+dialTimeout: "60s"
+readTimeout: "30m"
+writeTimeout: "30m"
+
+poolSize: 32

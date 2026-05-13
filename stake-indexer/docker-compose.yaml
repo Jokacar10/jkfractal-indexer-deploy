@@ -1,0 +1,75 @@
+x-logging: &logging
+  driver: "json-file"
+  options:
+    max-size: "1g"
+    max-file: "3"
+
+services:
+  indexer:
+    image: fractalbitcoin/stake-indexer:latest 
+    stop_signal: SIGINT
+    stop_grace_period: 10m
+    user: "1000:1000"
+    restart: unless-stopped
+    mem_limit: 4G
+    ports:
+      - "9637:9637"
+    extra_hosts:
+      - fractal-indexer:host-gateway
+    volumes:
+      - ./conf/indexer:/data/conf:ro
+    environment:
+      LISTEN: 0.0.0.0:9637
+      GIN_MODE: release
+    logging: *logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16
+    restart: always
+    stop_grace_period: 10m
+    shm_size: 1g
+    ports:
+      - "9432:5432"
+    environment:
+      POSTGRES_DB: stake_indexer
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: stake_indexer
+    volumes:
+      - ./data/pgdata:/var/lib/postgresql/data
+    command:
+      - "-cmax_wal_size=8GB"
+      - "-cshared_buffers=1GB"
+      - "-cwork_mem=512MB"
+      - "-ceffective_cache_size=16GB"
+      - "-cmax_worker_processes=8"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 3s
+    logging: *logging
+
+  redis:
+    image: redis:6.2.0-alpine
+    restart: always
+    stop_grace_period: 10m
+    ports:
+      - "9379:6379"
+    volumes:
+      - ./data/redis:/data
+      - ./conf/redis:/conf:ro
+    command: ["redis-server", "/conf/redis.conf"]
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 3s
+

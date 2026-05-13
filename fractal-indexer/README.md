@@ -1,0 +1,84 @@
+# Fractal Indexer
+
+`fractal-indexer` deploys the BRC20 indexing stack for the Fractal network. It runs two application containers plus the required storage services:
+
+- `indexer`: ingests chain data and writes indexed state
+- `api`: serves query traffic on port `8000`
+- `clickhouse`: analytical storage
+- `pika`: key-value storage for indexer state
+- `pika-brc20`: key-value storage used by the API
+
+## Directory Layout
+
+- `docker-compose.yaml`: stack definition
+- `scripts/init.sh`: creates local data directories and optionally initializes the database
+- `conf/indexer/chain.yaml.example`: template for Fractal node connectivity
+- `conf/indexer/db.yaml`: ClickHouse connection settings
+- `conf/indexer/kvdb.yaml`: Pika settings for the indexer
+- `conf/indexer/api/conf.yaml`: API runtime settings
+- `conf/indexer/api/kvdb_brc20.yaml`: Pika settings for API reads
+- `conf/pika/pika.conf`: Pika server configuration
+
+## Prerequisites
+
+- Docker and Docker Compose
+- A reachable Fractal node with ZMQ and RPC enabled
+- Permission to run `sudo chown` from `scripts/init.sh`
+
+## Configuration
+
+Create the chain config before first start:
+
+```bash
+cp conf/indexer/chain.yaml.example conf/indexer/chain.yaml
+```
+
+Edit `conf/indexer/chain.yaml` and set:
+
+- `zmq_block`
+- `zmq_tx`
+- `rpc`
+- `rpc_auth`
+
+The example uses `fractald` as the node hostname. `docker-compose.yaml` maps `fractald` to the Docker host with `extra_hosts: fractald:host-gateway`, so this works when the Fractal node is reachable from the host. Change the host or ports if your node is elsewhere.
+
+## Initialization
+
+Prepare local directories:
+
+```bash
+bash ./scripts/init.sh
+```
+
+Initialize the index tables before the first full start:
+
+```bash
+bash ./scripts/init.sh db
+```
+
+The `db` mode runs:
+
+```bash
+docker-compose run --rm indexer -full -end 1
+```
+
+## Start the Stack
+
+```bash
+docker-compose up -d indexer api
+```
+
+This also starts the dependent `clickhouse`, `pika`, and `pika-brc20` services through `depends_on`.
+
+## Verify the Deployment
+
+```bash
+docker-compose ps
+docker-compose logs --tail=100 -f indexer api
+```
+
+API endpoint:
+
+- `http://localhost:8000`
+
+The API may take time to become ready after startup because it needs to load indexed data first.

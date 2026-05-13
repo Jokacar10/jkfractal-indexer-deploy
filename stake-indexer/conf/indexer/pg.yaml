@@ -1,0 +1,11 @@
+host: "postgres"
+port: 5432
+user: "postgres"
+password: "stake_indexer"
+dbname: "stake_indexer"
+sslmode: "disable"
+
+max_open_conns: 20
+max_idle_conns: 10
+conn_max_lifetime: "30m"
+conn_max_idle_time: "10m"

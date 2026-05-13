@@ -1,0 +1,124 @@
+x-logging: &logging
+  driver: "json-file"
+  options:
+    labels: "env,filebeat,name"
+    max-size: "1g"
+    max-file: "3"
+
+services:
+  indexer:
+    image: fractalbitcoin/fractal-indexer:latest
+    stop_signal: SIGINT
+    stop_grace_period: 2h
+    user: "1000:1000"
+    restart: "unless-stopped"
+    environment:
+      GIN_MODE: release
+      LISTEN: 0.0.0.0:8000
+      ENABLE_WAL: "true"
+      MAX_REORG_BLOCKS: 100
+    volumes:
+      - ./conf/indexer:/data/conf:ro
+    extra_hosts:
+      - fractald:host-gateway
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      pika:
+        condition: service_healthy
+
+  api:
+    image: fractalbitcoin/fractal-indexer:latest
+    user: "1000:1000"
+    restart: "unless-stopped"
+    command: ["-api"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./conf/indexer:/data/conf:ro
+      - ./data/brc20:/data/data
+    extra_hosts:
+      - fractald:host-gateway
+    environment:
+      LISTEN: 0.0.0.0:8000
+      GIN_MODE: release
+      MODULE_SWAP_SOURCE_INSCRIPTION_ID: "34761af5d6aa0ab7f14589e6f0a905b505c40ba542c9a27d407c9d052499ffddi0"
+      MODULE_SWAP_INSCRIPTION_ID: "fd5bd482bed1b62d0702e2f19a1e3bdd4fb755fa5c9bed5d8d0f219a3219ee95i0"
+      DISABLE_VERIFY_TOKEN: "true"
+      BRC20_PRUNE_MINT_HISTORY: "true"
+      BRC20_PRUNE_HISTORY_LIST: "true"
+      BRC20_PRUNE_VALID_DATA_MAP: "true"
+      BRC20_ENABLE_SELF_MINT_HEIGHT: "21000"
+      BRC20_SWAP_MANDATORY_COMMIT_BEFORE_HEIGHT: "999999999"
+      MAX_STR_LEN_ALLOWED_TO_QUERY_FROM_RDB: 150000
+      BRC20_SINGLE_STEP_TRANSFER_HEIGHT: 930930
+      BRC20_ACCEPT_VINDICATED_INSCRIPTION_HEIGHT: 1050000
+      BRC20_SINGLE_STEP_TRANSFER_NON_TRANSFERABLE_HEIGHT: 1375380
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      pika:
+        condition: service_healthy
+      pika-brc20:
+        condition: service_healthy
+    logging: *logging
+
+  clickhouse:
+    image: yandex/clickhouse-server:21.12.4-alpine
+    user: "101:101"
+    restart: always
+    stop_grace_period: 10m
+    mem_limit: 16G
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - ./data/clickhouse:/var/lib/clickhouse
+      - ./logs/clickhouse:/var/log/clickhouse-server
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query=select 1"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 10s
+    logging: *logging
+
+  pika:
+    image: pikadb/pika:v3.5.6
+    user: "1000:1000"
+    stop_grace_period: 2h
+    restart: always
+    mem_limit: 16G
+    volumes:
+      - ./logs/pika:/pika/log
+      - ./conf/pika:/pika/conf:ro
+      - ./data/pika/db:/pika/db
+      - ./data/pika/dump:/pika/dump
+    healthcheck:
+      test: ["CMD-SHELL", "ls -l /proc/1/fd | grep 'socket:'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 3s
+    logging: *logging
+
+  pika-brc20:
+    image: pikadb/pika:v3.5.6
+    user: "1000:1000"
+    stop_grace_period: 2h
+    restart: always
+    mem_limit: 16G
+    ports:
+      - 9222:9221
+    volumes:
+      - ./logs/pika-brc20:/pika/log
+      - ./data/pika-brc20/db:/pika/db
+      - ./data/pika-brc20/dump:/pika/dump
+    healthcheck:
+      test: ["CMD-SHELL", "ls -l /proc/1/fd | grep 'socket:'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 3s
+    logging: *logging

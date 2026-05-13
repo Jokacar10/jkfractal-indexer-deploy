@@ -1,0 +1,12 @@
+chain_type: Fractal
+skip_missing_utxo: false
+
+zmq_block: "tcp://fractald:10330"
+zmq_tx: "tcp://fractald:10331"
+rpc: "http://fractald:10332"
+rpc_auth: "" # user:password
+
+jubilee_activation_height: 824544
+ordinals_activation_height: 767400
+reinscription_activation_height: 860000
+snapshot_interval_height: 500

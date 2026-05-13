@@ -1,0 +1,7 @@
+addrs: ["redis:6379"]
+database: 0
+password: ""
+dialTimeout: "60s"
+readTimeout: "30m"
+writeTimeout: "30m"
+poolSize: 32
