@@ -6,7 +6,11 @@ zmq_tx: "tcp://fractald:10331"
 rpc: "http://fractald:10332"
 rpc_auth: "" # user:password
 
-jubilee_activation_height: 824544
-ordinals_activation_height: 767400
-reinscription_activation_height: 860000
-snapshot_interval_height: 500
+
+utxo_pika_batch: 1024
+
+jubilee_activation_height: 21000
+ordinals_activation_height: 21000
+reinscription_activation_height: 21000
+brc20_single_step_transfer_height: 930930
+
