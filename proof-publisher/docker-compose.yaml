@@ -1,0 +1,18 @@
+services:
+  proof-publisher:
+    image: fractalbitcoin/fractal-proof-publisher:latest
+    restart: unless-stopped
+    init: true
+    user: "10001:10001"
+    command: ["run"]
+    environment:
+      PUBLISHER_CONFIG: /app/config/config.json
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config.json:/app/config/config.json:ro
+      - ./data:/app/data
+    extra_hosts:
+      - "fractald:host-gateway"
+      - "fractal-indexer:host-gateway"
+

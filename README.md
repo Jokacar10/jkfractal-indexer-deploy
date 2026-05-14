@@ -1,9 +1,10 @@
 # Fractal Indexer Deploy
 
-This repository provides Docker Compose deployments for two services on the Fractal network:
+This repository provides Docker Compose deployments for Fractal network services:
 
 - `fractal-indexer/`: indexes BRC20 data and exposes a query API
 - `stake-indexer/`: indexes staking data and depends on the Fractal indexer API
+- `proof-publisher/`: optional proof submission daemon that publishes `register` and `prove` inscriptions
 
 Each stack is self-contained and should be started from its own directory.
 
@@ -11,15 +12,17 @@ Upstream project repositories:
 
 - `fractal-indexer`: [github.com/fractal-bitcoin/fractal-indexer](https://github.com/fractal-bitcoin/fractal-indexer)
 - `stake-indexer`: [github.com/fractal-bitcoin/stake-indexer](https://github.com/fractal-bitcoin/stake-indexer)
+- `fractal-proof-publisher`: [github.com/fractal-bitcoin/fractal-proof-publisher](https://github.com/fractal-bitcoin/fractal-proof-publisher)
 
 ## Service Endpoints
 
 - Fractal indexer API: `http://localhost:8000`
 - Stake indexer API: `http://localhost:9637`
+- Proof publisher health: `http://localhost:8080/healthz`
 
 ## Prerequisites
 
-This deployment requires a running `fractald` node. `fractal-indexer` depends on the node's RPC and ZMQ interfaces; `stake-indexer` uses the node's RPC interface and the Fractal indexer API.
+This deployment requires a running `fractald` node. `fractal-indexer` depends on the node's RPC and ZMQ interfaces; `stake-indexer` uses the node's RPC interface and the Fractal indexer API. The optional proof publisher uses Fractald RPC, the Fractal indexer API, and local signing material.
 
 - Fractald deployment guide: [github.com/fractal-bitcoin/fractald-release](https://github.com/fractal-bitcoin/fractald-release)
 
@@ -30,7 +33,7 @@ This deployment requires a running `fractald` node. `fractal-indexer` depends on
 
 ## Quick Start
 
-Follow the steps below in order. Start `fractal-indexer` first, then `stake-indexer`.
+Follow the steps below in order. Start `fractal-indexer` first, then `stake-indexer`. Start `proof-publisher` only if this node should publish proofs on chain.
 
 ### 1. Clone this repository
 
@@ -87,6 +90,29 @@ docker-compose up -d
 cd ..
 ```
 
+### 5. Optional: start `proof-publisher`
+
+The proof publisher holds a signing key and can broadcast transactions, so it is
+not started by default.
+
+```bash
+cd proof-publisher
+cp config.example.json config.json
+```
+
+Edit `config.json` and set the Fractald RPC credentials, signing key, change
+address, reward address, indexer name, and UniSat Open API key. The default
+`state_api.base_url` is `http://fractal-indexer:8000`, which points to the
+Fractal indexer API through Docker host mapping.
+
+Then start it:
+
+```bash
+bash ./scripts/init.sh
+docker-compose up -d
+cd ..
+```
+
 ## Validation
 
 Use these commands after startup:
@@ -100,6 +126,7 @@ Check:
 
 - `http://localhost:8000/brc20/bestheight` for the Fractal indexer API
 - `http://localhost:9637/indexer/status` for the stake indexer API
+- `http://localhost:8080/healthz` for the optional proof publisher
 
 ## Fractal Indexer Snapshot
 

@@ -1,0 +1,9 @@
+.DS_Store
+
+# Local configs and runtime data
+config.json
+*/config.json
+fractal-indexer/conf/indexer/chain.yaml
+stake-indexer/conf/indexer/chain.yaml
+*/data/
+*/logs/
