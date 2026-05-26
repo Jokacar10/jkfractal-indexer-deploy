@@ -166,3 +166,10 @@ Then start the stack:
 ```bash
 docker-compose up -d
 ```
+
+## Changelog
+
+### 20260526
+
+1. Updated `stake-indexer` to version `v0.1.1`.
+2. Updated `stake-indexer/conf/indexer/config.yaml`.

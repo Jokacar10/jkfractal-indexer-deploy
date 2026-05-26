@@ -3,13 +3,13 @@ batch_block_count: 500
 slow_lag_blocks: 20160
 proof_window: 20160
 delay_submit_trigger_blocks: 120
-start_reward_height: 1764000
+start_reward_height: 1760000
 state_api_base_url: http://fractal-indexer:8000
 state_api_auth: ""
 state_api_timeout: 5s
-reward_claim_sender_address_keys: []
+reward_claim_sender_address_keys: [bc1plamv6ynv4tt4ez4k8za7xrk4d2s8fpxdjturhfysnudzgzjazgvqls9kt0]
 indexer_allowlist_windows:
-  - start_height: 1764000
+  - start_height: 1760000
     end_height: 1844640
     indexer_ids: ["1761438:1"]
 reward_release_tiers:

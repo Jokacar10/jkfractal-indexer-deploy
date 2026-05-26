@@ -6,7 +6,7 @@ x-logging: &logging
 
 services:
   indexer:
-    image: fractalbitcoin/stake-indexer:latest 
+    image: fractalbitcoin/stake-indexer:v0.1.1
     stop_signal: SIGINT
     stop_grace_period: 10m
     user: "1000:1000"
