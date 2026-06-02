@@ -169,7 +169,14 @@ docker-compose up -d
 
 ## Changelog
 
+### 20260602
+
+1. Updated `stake-indexer` to version `v0.2.0`.
+2. Updated `stake-indexer/conf/indexer/config.yaml`.
+
+
 ### 20260526
 
 1. Updated `stake-indexer` to version `v0.1.1`.
 2. Updated `stake-indexer/conf/indexer/config.yaml`.
+
