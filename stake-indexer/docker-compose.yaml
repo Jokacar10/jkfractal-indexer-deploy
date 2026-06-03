@@ -15,6 +15,7 @@ services:
     ports:
       - "9637:9637"
     extra_hosts:
+      - fractald:host-gateway
       - fractal-indexer:host-gateway
     volumes:
       - ./conf/indexer:/data/conf:ro

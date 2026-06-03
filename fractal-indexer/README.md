@@ -42,6 +42,25 @@ Edit `conf/indexer/chain.yaml` and set:
 
 The example uses `fractald` as the node hostname. `docker-compose.yaml` maps `fractald` to the Docker host with `extra_hosts: fractald:host-gateway`, so this works when the Fractal node is reachable from the host. Change the host or ports if your node is elsewhere.
 
+## Manual Deployment
+
+Run these steps when deploying `fractal-indexer` by itself instead of using the
+top-level `scripts/deploy.sh` workflow:
+
+```bash
+cd fractal-indexer
+cp conf/indexer/chain.yaml.example conf/indexer/chain.yaml
+```
+
+Edit `conf/indexer/chain.yaml` so `zmq_block`, `zmq_tx`, `rpc`, and `rpc_auth`
+point to your Fractald node. Then prepare local data, initialize the DB, and
+start the indexer:
+
+```bash
+bash ./scripts/init.sh db
+docker-compose up -d
+```
+
 ## Initialization
 
 Prepare local directories:
@@ -59,7 +78,7 @@ bash ./scripts/init.sh db
 The `db` mode runs:
 
 ```bash
-docker-compose run --rm indexer -full -end 1
+docker-compose run --rm indexer -full -end 256
 ```
 
 ## Start the Stack

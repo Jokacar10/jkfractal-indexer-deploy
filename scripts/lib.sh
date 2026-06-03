@@ -120,7 +120,7 @@ ensure_empty_or_missing() {
   local path="$1"
 
   if [ -e "$path" ] && [ "$(find "$path" -mindepth 1 -maxdepth 1 2>/dev/null | head -n 1)" ]; then
-    die "${path} already exists and is not empty"
+    die "${path} already exists and is not empty; add --force to ignore this check"
   fi
 }
 
@@ -169,115 +169,101 @@ kopia_snapshot_json_by_tags() {
     tag_args+=(--tags="$tag")
   done
 
-  kopia snapshot list --all --json "${tag_args[@]}"
+  kopia snapshot list --all --json "${tag_args[@]}" || true
 }
 
 kopia_snapshot_object_id() {
-  kopia_snapshot_json_by_tags "$@" \
+  local object_id
+  local tags_display
+
+  tags_display="$(IFS=,; printf '%s' "$*")"
+  object_id="$(kopia_snapshot_json_by_tags "$@" \
     | jq -er '
       if type == "array" then flatten else [.] end
       | map(select(.rootEntry.obj != null))
       | sort_by(.startTime // .endTime // "")
       | last
-      | .rootEntry.obj
-    '
+      | .rootEntry.obj // empty
+    ' || true)"
+
+  if [ -z "$object_id" ]; then
+    die "snapshot not found for tags: ${tags_display}"
+  fi
+
+  printf '%s\n' "$object_id"
 }
 
-write_fractald_config() {
-  local user="$1"
-  local password="$2"
-  local target="${REPO_ROOT}/fractald/conf/bitcoin.conf"
+sed_replacement_escape() {
+  sed -e 's/[\/&]/\\&/g'
+}
+
+generate_from_template() {
+  local template="$1"
+  local target="$2"
+  local sed_args=()
+  local placeholder value
+
+  shift 2
+
+  while [ "$#" -gt 0 ]; do
+    placeholder="$1"
+    value="$(printf '%s' "$2" | sed_replacement_escape)"
+    sed_args+=(-e "s/${placeholder}/${value}/g")
+    shift 2
+  done
 
   mkdir -p "$(dirname "$target")"
-  cat >"$target" <<EOF
-server=1
-port=10333
-txindex=1
-blocksxor=0
-
-prune=102400
-
-datadir=/data
-blocksdir=/data
-dbcache=4096
-
-rpcbind=0.0.0.0
-rpcallowip=0.0.0.0/0
-rpcport=10332
-rpcuser=${user}
-rpcpassword=${password}
-rpcworkqueue=2048
-rpcthreads=32
-rpcservertimeout=120
-
-zmqpubrawblock=tcp://0.0.0.0:10330
-zmqpubrawtx=tcp://0.0.0.0:10331
-EOF
+  sed "${sed_args[@]}" "$template" >"$target"
 }
 
-write_fractal_indexer_chain_config() {
+generate_fractald_config() {
+  local user="$1"
+  local password="$2"
+  local template="${REPO_ROOT}/fractald/conf/bitcoin.conf.example"
+  local target="${REPO_ROOT}/fractald/conf/bitcoin.conf"
+
+  generate_from_template "$template" "$target" \
+    "{REPLACE_RPC_USER}" "$user" \
+    "{REPLACE_RPC_PASSWORD}" "$password"
+}
+
+generate_fractal_indexer_chain_config() {
   local rpc_user="$1"
   local rpc_password="$2"
+  local template="${REPO_ROOT}/fractal-indexer/conf/indexer/chain.yaml.example"
   local target="${REPO_ROOT}/fractal-indexer/conf/indexer/chain.yaml"
 
-  cat >"$target" <<EOF
-chain_type: Fractal
-skip_missing_utxo: false
-
-zmq_block: "tcp://fractald:10330"
-zmq_tx: "tcp://fractald:10331"
-rpc: "http://fractald:10332"
-rpc_auth: "${rpc_user}:${rpc_password}"
-
-
-utxo_pika_batch: 1024
-
-jubilee_activation_height: 21000
-ordinals_activation_height: 21000
-reinscription_activation_height: 21000
-brc20_single_step_transfer_height: 930930
-EOF
+  generate_from_template "$template" "$target" \
+    "{REPLACE_RPC_USER}" "$rpc_user" \
+    "{REPLACE_RPC_PASSWORD}" "$rpc_password"
 }
 
-write_stake_indexer_chain_config() {
+generate_stake_indexer_chain_config() {
   local rpc_user="$1"
   local rpc_password="$2"
+  local template="${REPO_ROOT}/stake-indexer/conf/indexer/chain.yaml.example"
   local target="${REPO_ROOT}/stake-indexer/conf/indexer/chain.yaml"
 
-  cat >"$target" <<EOF
-rpc: "http://fractald:10332"
-rpc_auth: "${rpc_user}:${rpc_password}"
-EOF
+  generate_from_template "$template" "$target" \
+    "{REPLACE_RPC_USER}" "$rpc_user" \
+    "{REPLACE_RPC_PASSWORD}" "$rpc_password"
 }
 
-write_proof_publisher_config() {
+generate_proof_publisher_config() {
   local rpc_user="$1"
   local rpc_password="$2"
+  local template="${REPO_ROOT}/proof-publisher/config.example.json"
   local target="${REPO_ROOT}/proof-publisher/config.json"
 
-  cp "${REPO_ROOT}/proof-publisher/config.example.json" "$target"
-
-  jq \
-    --arg rpc_user "$rpc_user" \
-    --arg rpc_password "$rpc_password" \
-    --arg private_key "${PROOF_PRIVATE_KEY_WIF:-REPLACE_PRIVATE_KEY_WIF}" \
-    --arg change_address "${PROOF_CHANGE_ADDRESS:-REPLACE_CHANGE_ADDRESS}" \
-    --arg reward_address "${PROOF_REWARD_ADDRESS:-REPLACE_REWARD_ADDRESS}" \
-    --arg indexer_name "${PROOF_INDEXER_NAME:-REPLACE_INDEXER_NAME}" \
-    --arg indexer_id "${PROOF_INDEXER_ID:-}" \
-    --arg unisat_key "${PROOF_UNISAT_OPEN_API_KEY:-REPLACE_UNISAT_OPEN_API_KEY}" \
-    '
-      .bitcoin_rpc.user = $rpc_user
-      | .bitcoin_rpc.password = $rpc_password
-      | .signing.private_key_wif = $private_key
-      | .signing.change_address = $change_address
-      | .register.reward_addr = $reward_address
-      | .register.name = $indexer_name
-      | .register.indexer_id = $indexer_id
-      | .runtime.unisat_open_api_key = $unisat_key
-    ' "$target" >"${target}.tmp"
-
-  mv "${target}.tmp" "$target"
+  generate_from_template "$template" "$target" \
+    "REPLACE_RPC_USER" "$rpc_user" \
+    "REPLACE_RPC_PASSWORD" "$rpc_password" \
+    "REPLACE_PRIVATE_KEY_WIF" "${PROOF_PRIVATE_KEY_WIF:-REPLACE_PRIVATE_KEY_WIF}" \
+    "REPLACE_CHANGE_ADDRESS" "${PROOF_CHANGE_ADDRESS:-REPLACE_CHANGE_ADDRESS}" \
+    "REPLACE_REWARD_ADDRESS" "${PROOF_REWARD_ADDRESS:-REPLACE_REWARD_ADDRESS}" \
+    "REPLACE_INDEXER_NAME" "${PROOF_INDEXER_NAME:-REPLACE_INDEXER_NAME}" \
+    "REPLACE_EXISTING_INDEXER_ID_OR_EMPTY" "${PROOF_INDEXER_ID:-}" \
+    "REPLACE_UNISAT_OPEN_API_KEY" "${PROOF_UNISAT_OPEN_API_KEY:-REPLACE_UNISAT_OPEN_API_KEY}"
 }
 
 proof_publisher_can_start() {

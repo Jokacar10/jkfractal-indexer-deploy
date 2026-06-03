@@ -15,5 +15,5 @@ sudo chown -R 101:101 data/clickhouse logs/clickhouse
 test "$1" == "db" && (
   echo ">>> Init Database"
   set -x; docker-compose run --rm indexer -full -end 256
-)
+) || true
 

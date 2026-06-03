@@ -2,116 +2,123 @@
 
 This repository provides Docker Compose deployments for Fractal network services:
 
+- `fractald/`: runs the Fractal node used by the indexers
 - `fractal-indexer/`: indexes BRC20 data and exposes a query API
 - `stake-indexer/`: indexes staking data and depends on the Fractal indexer API
 - `proof-publisher/`: optional proof submission daemon that publishes `register` and `prove` inscriptions
 
-Each stack is self-contained and should be started from its own directory.
+The top-level deploy script orchestrates these stacks. Each service directory
+also contains its own Docker Compose files and initialization scripts.
 
 Upstream project repositories:
 
+- `fractald`: [github.com/fractal-bitcoin/fractald-release](https://github.com/fractal-bitcoin/fractald-release)
 - `fractal-indexer`: [github.com/fractal-bitcoin/fractal-indexer](https://github.com/fractal-bitcoin/fractal-indexer)
 - `stake-indexer`: [github.com/fractal-bitcoin/stake-indexer](https://github.com/fractal-bitcoin/stake-indexer)
 - `fractal-proof-publisher`: [github.com/fractal-bitcoin/fractal-proof-publisher](https://github.com/fractal-bitcoin/fractal-proof-publisher)
 
 ## Service Endpoints
 
+- Fractald RPC: `http://localhost:10332`
 - Fractal indexer API: `http://localhost:8000`
 - Stake indexer API: `http://localhost:9637`
 - Proof publisher health: `http://localhost:8080/healthz`
 
 ## Prerequisites
 
-This deployment requires a running `fractald` node. `fractal-indexer` depends on the node's RPC and ZMQ interfaces; `stake-indexer` uses the node's RPC interface and the Fractal indexer API. The optional proof publisher uses Fractald RPC, the Fractal indexer API, and local signing material.
+Install these tools before running the deploy script:
 
-- Fractald deployment guide: [github.com/fractal-bitcoin/fractald-release](https://github.com/fractal-bitcoin/fractald-release)
+- Docker with Docker Compose
+- `jq`, See the official installation guide: [https://jqlang.org/download/](https://jqlang.org/download/)
+- `kopia`, required for snapshot restore. See the official Kopia installation guide: [kopia.io/docs/installation](https://kopia.io/docs/installation/)
 
 ## Resource Requirements
 
+- `fractald`: disk `400 GB+`, minimum memory `8 GB`, recommended memory `16 GB`
 - `fractal-indexer`: disk `400 GB+`, minimum memory `64 GB`, recommended memory `128 GB`
-- `stake-indexer`: disk `1 GB+`, minimum memory `1 GB`, recommended memory `1 GB`
 
 ## Quick Start
 
-Follow the steps below in order. Start `fractal-indexer` first, then `stake-indexer`. Start `proof-publisher` only if this node should publish proofs on chain.
+`scripts/deploy.sh` only supports fresh deployments by default. To redeploy,
+stop all services first and remove the runtime `data` directories before running
+the script again:
 
-For a fresh community deployment with snapshots, use the Kopia one-click
-workflow instead of the manual steps:
+```bash
+docker-compose -f fractald/docker-compose.yaml down
+docker-compose -f fractal-indexer/docker-compose.yaml down
+docker-compose -f stake-indexer/docker-compose.yaml down
+docker-compose -f proof-publisher/docker-compose.yaml down
+
+rm -rf fractald/data fractal-indexer/data stake-indexer/data proof-publisher/data
+```
+
+The `--force` option only skips existing data directory checks; it does not
+delete or clean old data.
+
+The recommended quick start deploys from Kopia snapshots. This avoids syncing
+`fractald` and rebuilding `fractal-indexer` data from genesis.
+
+The current default snapshot height is `1820067`:
 
 ```bash
 git clone https://github.com/fractal-bitcoin/fractal-indexer-deploy
 cd fractal-indexer-deploy
 
-export AWS_ACCESS_KEY_ID="<read-only-r2-access-key>"
-export AWS_SECRET_ACCESS_KEY="<read-only-r2-secret-key>"
-
-scripts/deploy-with-kopia-snapshots.sh 1775090
+scripts/deploy.sh --snapshot=1820067
 ```
 
-The one-click script requires an explicit snapshot height. It does not select a
-`latest` snapshot automatically.
-
-The one-click script restores `fractald` and `fractal-indexer` snapshots from
-Kopia/R2, starts `fractald`, `fractal-indexer`, and `stake-indexer`, and
+The deploy script starts `fractald`, `fractal-indexer`, and `stake-indexer`, and
 generates `proof-publisher/config.json`. It starts `proof-publisher` only when
 all signing and broadcast environment variables are provided.
 
-### 1. Clone this repository
+## Manual Service Deployment
+
+For manual deployment of individual services, see the README in each service
+directory:
+
+- `fractald`: [fractald/README.md](fractald/README.md)
+- `fractal-indexer`: [fractal-indexer/README.md](fractal-indexer/README.md)
+- `stake-indexer`: [stake-indexer/README.md](stake-indexer/README.md)
+- `proof-publisher`: [proof-publisher/README.md](proof-publisher/README.md)
+
+## Fractald Deployment
+
+`fractald` is started by `scripts/deploy.sh` before the indexers. The script
+generates `fractald/conf/bitcoin.conf` with RPC credentials on first run. If
+`fractald/conf/bitcoin.conf` already exists, the script reads the existing
+`rpcuser` and `rpcpassword` and reuses them for all generated indexer configs.
+
+When deploying with `--snapshot`, the script restores the Fractald `blocks` and
+`chainstate` datasets before starting the node, then waits until Fractald RPC
+responds successfully.
+
+Fractald exposes these container ports through Docker Compose:
+
+- P2P: `10333`
+- RPC: `10332`
+- ZMQ raw block: `10330`
+- ZMQ raw transaction: `10331`
+
+## Deploy Without Snapshots
+
+You can run the deploy script without `--snapshot`:
 
 ```bash
-git clone https://github.com/fractal-bitcoin/fractal-indexer-deploy
-cd fractal-indexer-deploy
+scripts/deploy.sh
 ```
 
-### 2. Prepare the chain configuration
+Without snapshots, Fractald must sync from genesis and `fractal-indexer` must
+build its data from the beginning. This can take a long time.
 
-Create local config files from the examples:
+Before running without snapshots, consider removing the Fractald `prune`
+configuration from `fractald/conf/bitcoin.conf` or
+`fractald/conf/bitcoin.conf.example`. Running `fractal-indexer` against a pruned
+node may cause indexing failures.
 
-```bash
-cp fractal-indexer/conf/indexer/chain.yaml.example fractal-indexer/conf/indexer/chain.yaml
-cp stake-indexer/conf/indexer/chain.yaml.example stake-indexer/conf/indexer/chain.yaml
-```
+A full node plus full index data requires more than `3 TB` of disk space. For a
+full index rebuild from genesis, `128 GB+` memory is recommended.
 
-Then review these files:
-
-- `fractal-indexer/conf/indexer/chain.yaml`
-- `stake-indexer/conf/indexer/chain.yaml`
-
-`fractal-indexer/conf/indexer/chain.yaml.example` points to a Fractald node at:
-
-- `zmq_block: tcp://fractald:10330`
-- `zmq_tx: tcp://fractald:10331`
-- `rpc: http://fractald:10332`
-
-`stake-indexer/conf/indexer/chain.yaml.example` only needs Fractald RPC:
-
-- `rpc: http://fractald:10332`
-
-Set `rpc_auth` to `<user>:<password>`, and change the host or ports if your node is not reachable as `fractald` from the containers.
-
-If `stake-indexer` needs to read chain state from a different Fractal indexer endpoint, update `state_api_base_url` in `stake-indexer/conf/indexer/config.yaml`. The default is `http://fractal-indexer:8000`.
-
-### 3. Start `fractal-indexer`
-
-```bash
-cd fractal-indexer
-bash ./scripts/init.sh db
-docker-compose up -d
-cd ..
-```
-
-After startup, the indexer begins syncing chain data. This can take a long time. If you want a faster startup, use the snapshot described in [Fractal Indexer Snapshot](#fractal-indexer-snapshot).
-
-### 4. Start `stake-indexer`
-
-```bash
-cd stake-indexer
-bash ./scripts/init.sh
-docker-compose up -d
-cd ..
-```
-
-### 5. Optional: start `proof-publisher`
+## Optional Proof Publisher
 
 The proof publisher holds a signing key and can broadcast transactions, so it is
 not started by default.
@@ -148,73 +155,6 @@ Check:
 - `http://localhost:8000/brc20/bestheight` for the Fractal indexer API
 - `http://localhost:9637/indexer/status` for the stake indexer API
 - `http://localhost:8080/healthz` for the optional proof publisher
-
-## Fractal Indexer Snapshot
-
-This is the legacy tarball snapshot workflow. New deployments should prefer the
-Kopia one-click workflow in [Quick Start](#quick-start).
-
-The snapshot allows `fractal-indexer` to start from preloaded data instead of syncing from scratch.
-
-The latest available snapshot in this README is at height `1753260`.
-
-Before restoring a snapshot:
-
-- stop all `fractal-indexer` services
-- clear the existing `fractal-indexer/data` directory
-
-Download and extract the snapshot:
-
-```bash
-mkdir -p fractal-indexer/data
-cd fractal-indexer/data
-
-curl https://snapshot.fractalbitcoin.io/fractal-indexer/1753260/pika-brc20.tar.zst | tar --zstd -xf -
-curl https://snapshot.fractalbitcoin.io/fractal-indexer/1753260/brc20-base.tar.zst | tar --zstd -xf -
-curl https://snapshot.fractalbitcoin.io/fractal-indexer/1753260/pika.tar.zst | tar --zstd -xf -
-curl https://snapshot.fractalbitcoin.io/fractal-indexer/1753260/clickhouse.tar.zst | tar --zstd -xf -
-cd ../..
-```
-
-These files are large, so downloading and extracting them may take from one hour to several hours.
-
-After the snapshot is restored, run the initialization script once to fix directory ownership:
-
-```bash
-cd fractal-indexer
-bash ./scripts/init.sh
-```
-
-Then start the stack:
-
-```bash
-docker-compose up -d
-```
-
-## Kopia Snapshot Publishing
-
-Operators can publish `fractald` and `fractal-indexer` snapshots to Cloudflare
-R2 with Kopia.
-
-Source data must be under `/opt/fractal-indexer-deploy`, for example:
-
-- `/opt/fractal-indexer-deploy/fractald/data/blocks`
-- `/opt/fractal-indexer-deploy/fractald/data/chainstate`
-- `/opt/fractal-indexer-deploy/fractal-indexer/data`
-
-Publish a snapshot:
-
-```bash
-export AWS_ACCESS_KEY_ID="<write-capable-r2-access-key>"
-export AWS_SECRET_ACCESS_KEY="<write-capable-r2-secret-key>"
-
-scripts/upload-kopia-snapshots.sh 1775090
-```
-
-The script connects to the Kopia repository at bucket `kopia-repo`, endpoint
-`eccc9c966ad74b3b2b15c2961767d059.r2.cloudflarestorage.com`, prefix
-`fractald-pruned`, and tags snapshots with the height, dataset identity,
-`network:fractal-mainnet`, and `role:snapshot`.
 
 ## Changelog
 

@@ -1,2 +1,2 @@
 rpc: "http://fractald:10332"
-rpc_auth: "" # user:password
+rpc_auth: "{REPLACE_RPC_USER}:{REPLACE_RPC_PASSWORD}" # user:password

@@ -55,6 +55,25 @@ This makes the publisher read state hashes from:
 GET /brc20/statehash?start={height}&end={height}
 ```
 
+## Manual Deployment
+
+Run these steps when deploying `proof-publisher` by itself instead of using the
+top-level `scripts/deploy.sh` workflow:
+
+```bash
+cd proof-publisher
+cp config.example.json config.json
+```
+
+Edit `config.json` with Fractald RPC credentials, signing settings, reward
+address, indexer name, and UniSat Open API key. Then initialize and start the
+publisher:
+
+```bash
+bash ./scripts/init.sh
+docker-compose up -d
+```
+
 ## Start
 
 ```bash

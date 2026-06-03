@@ -48,6 +48,25 @@ state_api_timeout: 5s
 
 `docker-compose.yaml` maps `fractal-indexer` to the Docker host with `extra_hosts: fractal-indexer:host-gateway`. Keep this value if the Fractal indexer API is published on the host at port `8000`; otherwise update it to the correct reachable address.
 
+## Manual Deployment
+
+Run these steps when deploying `stake-indexer` by itself instead of using the
+top-level `scripts/deploy.sh` workflow:
+
+```bash
+cd stake-indexer
+cp conf/indexer/chain.yaml.example conf/indexer/chain.yaml
+```
+
+Edit `conf/indexer/chain.yaml` so `rpc` and `rpc_auth` point to your Fractald
+node. If needed, edit `conf/indexer/config.yaml` so `state_api_base_url` points
+to your Fractal indexer API. Then initialize and start the stack:
+
+```bash
+bash ./scripts/init.sh
+docker-compose up -d
+```
+
 ## Initialization
 
 Prepare local directories:
