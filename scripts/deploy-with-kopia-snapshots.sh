@@ -72,7 +72,7 @@ restore_dataset() {
   local target="$2"
   local object_id tags_display
   local tags=(
-    "network:fractal-mainnet"
+    "network:fractal"
     "role:snapshot"
     "dataset:${dataset}"
     "height:${snapshot_height}"
@@ -132,10 +132,7 @@ log "Initializing fractal-indexer"
 write_fractal_indexer_chain_config "$rpc_user" "$rpc_password"
 
 log "Restoring fractal-indexer snapshots"
-restore_dataset fractal-indexer-brc20 "${REPO_ROOT}/fractal-indexer/data/brc20"
-restore_dataset fractal-indexer-clickhouse "${REPO_ROOT}/fractal-indexer/data/clickhouse"
-restore_dataset fractal-indexer-pika "${REPO_ROOT}/fractal-indexer/data/pika"
-restore_dataset fractal-indexer-pika-brc20 "${REPO_ROOT}/fractal-indexer/data/pika-brc20"
+restore_dataset fractal-indexer-data "${REPO_ROOT}/fractal-indexer/data"
 
 log "Fixing fractal-indexer ownership"
 sudo chown -R 1000:1000 \

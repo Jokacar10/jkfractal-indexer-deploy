@@ -1,6 +1,6 @@
 services:
   fractald:
-    image: fractalbitcoin/fractal:v0.3.0
+    image: fractalbitcoin/fractal:v0.3.0rc2
     restart: unless-stopped
     stop_grace_period: 30m
     entrypoint: ["bitcoind", "--conf=/conf/bitcoin.conf"]

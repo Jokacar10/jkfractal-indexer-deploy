@@ -7,7 +7,9 @@ x-logging: &logging
 
 services:
   indexer:
-    image: fractalbitcoin/fractal-indexer:latest
+    #image: fractalbitcoin/fractal-indexer:latest
+    image: cr.unisat.io/unisat/fractal-indexer:da530ea
+    #image: fractal-indexer:v0603-test2
     stop_signal: SIGINT
     stop_grace_period: 2h
     user: "1000:1000"
@@ -28,7 +30,8 @@ services:
         condition: service_healthy
 
   api:
-    image: fractalbitcoin/fractal-indexer:latest
+    #image: fractalbitcoin/fractal-indexer:latest
+    image: cr.unisat.io/unisat/fractal-indexer:da530ea
     user: "1000:1000"
     restart: "unless-stopped"
     command: ["-api"]

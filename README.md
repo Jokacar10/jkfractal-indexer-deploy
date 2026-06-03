@@ -200,10 +200,7 @@ Source data must be under `/opt/fractal-indexer-deploy`, for example:
 
 - `/opt/fractal-indexer-deploy/fractald/data/blocks`
 - `/opt/fractal-indexer-deploy/fractald/data/chainstate`
-- `/opt/fractal-indexer-deploy/fractal-indexer/data/brc20`
-- `/opt/fractal-indexer-deploy/fractal-indexer/data/clickhouse`
-- `/opt/fractal-indexer-deploy/fractal-indexer/data/pika`
-- `/opt/fractal-indexer-deploy/fractal-indexer/data/pika-brc20`
+- `/opt/fractal-indexer-deploy/fractal-indexer/data`
 
 Publish a snapshot:
 

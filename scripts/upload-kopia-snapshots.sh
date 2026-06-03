@@ -47,11 +47,8 @@ datasets=$(
   cat <<EOF
 fractald-blocks|${UPLOAD_BASE_DIR}/fractald/data/blocks
 fractald-chainstate|${UPLOAD_BASE_DIR}/fractald/data/chainstate
+fractal-indexer-data|${UPLOAD_BASE_DIR}/fractal-indexer/data
 EOF
-#fractal-indexer-brc20|${UPLOAD_BASE_DIR}/fractal-indexer/data/brc20
-#fractal-indexer-clickhouse|${UPLOAD_BASE_DIR}/fractal-indexer/data/clickhouse
-#fractal-indexer-pika|${UPLOAD_BASE_DIR}/fractal-indexer/data/pika
-#fractal-indexer-pika-brc20|${UPLOAD_BASE_DIR}/fractal-indexer/data/pika-brc20
 )
 
 missing=0
@@ -91,14 +88,15 @@ while IFS='|' read -r dataset path; do
 
   tag_args=(
     --tags="height:${snapshot_height}"
-    --tags="network:fractal-mainnet"
+    --tags="network:fractal"
+    --tags="role:snapshot"
     --tags="dataset:${dataset}"
   )
 
   log "Uploading ${dataset} from ${path}"
   kopia snapshot create "$path" "${tag_args[@]}"
 
-  snapshot_id="$(kopia_snapshot_object_id "height:${snapshot_height}" "dataset:${dataset}")"
+  snapshot_id="$(kopia_snapshot_object_id "height:${snapshot_height}" "network:fractal" "role:snapshot" "dataset:${dataset}")"
 
   printf '%s\t%s\t%s\t%s\n' "$snapshot_height" "$dataset" "$snapshot_id" "$path" >>"$summary_file"
 done <<EOF

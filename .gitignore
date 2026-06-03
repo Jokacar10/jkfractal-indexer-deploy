@@ -3,9 +3,10 @@
 # Local configs and runtime data
 config.json
 */config.json
+.env
 fractal-indexer/conf/indexer/chain.yaml
 stake-indexer/conf/indexer/chain.yaml
-fractald/.env
 fractald/conf/bitcoin.conf
 */data/
 */logs/
+.kopia-cache/

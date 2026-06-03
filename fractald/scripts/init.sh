@@ -5,6 +5,7 @@ echo ">>> Init Directory"
 (
 set -x
 mkdir -p data conf
+test -f conf/bitcoin.conf || cp conf/bitcoin.conf.example conf/bitcoin.conf
 sudo chown -R 1000:1000 data
 )
 
