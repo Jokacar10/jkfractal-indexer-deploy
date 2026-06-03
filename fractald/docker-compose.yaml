@@ -1,0 +1,26 @@
+services:
+  fractald:
+    image: fractalbitcoin/fractal:v0.3.0
+    restart: unless-stopped
+    stop_grace_period: 30m
+    entrypoint: ["bitcoind", "--conf=/conf/bitcoin.conf"]
+    user: 1000:1000
+    ports:
+      - "10330:10330"
+      - "10331:10331"
+      - "10332:10332"
+      - "10333:10333"
+    volumes:
+      - ./conf:/conf:ro
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "bitcoin-cli", "--conf=/conf/bitcoin.conf", "getblockchaininfo"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1g"
+        max-file: "3"

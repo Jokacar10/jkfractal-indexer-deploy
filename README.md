@@ -35,6 +35,27 @@ This deployment requires a running `fractald` node. `fractal-indexer` depends on
 
 Follow the steps below in order. Start `fractal-indexer` first, then `stake-indexer`. Start `proof-publisher` only if this node should publish proofs on chain.
 
+For a fresh community deployment with snapshots, use the Kopia one-click
+workflow instead of the manual steps:
+
+```bash
+git clone https://github.com/fractal-bitcoin/fractal-indexer-deploy
+cd fractal-indexer-deploy
+
+export AWS_ACCESS_KEY_ID="<read-only-r2-access-key>"
+export AWS_SECRET_ACCESS_KEY="<read-only-r2-secret-key>"
+
+scripts/deploy-with-kopia-snapshots.sh 1775090
+```
+
+The one-click script requires an explicit snapshot height. It does not select a
+`latest` snapshot automatically.
+
+The one-click script restores `fractald` and `fractal-indexer` snapshots from
+Kopia/R2, starts `fractald`, `fractal-indexer`, and `stake-indexer`, and
+generates `proof-publisher/config.json`. It starts `proof-publisher` only when
+all signing and broadcast environment variables are provided.
+
 ### 1. Clone this repository
 
 ```bash
@@ -130,6 +151,9 @@ Check:
 
 ## Fractal Indexer Snapshot
 
+This is the legacy tarball snapshot workflow. New deployments should prefer the
+Kopia one-click workflow in [Quick Start](#quick-start).
+
 The snapshot allows `fractal-indexer` to start from preloaded data instead of syncing from scratch.
 
 The latest available snapshot in this README is at height `1753260`.
@@ -167,6 +191,34 @@ Then start the stack:
 docker-compose up -d
 ```
 
+## Kopia Snapshot Publishing
+
+Operators can publish `fractald` and `fractal-indexer` snapshots to Cloudflare
+R2 with Kopia.
+
+Source data must be under `/opt/fractal-indexer-deploy`, for example:
+
+- `/opt/fractal-indexer-deploy/fractald/data/blocks`
+- `/opt/fractal-indexer-deploy/fractald/data/chainstate`
+- `/opt/fractal-indexer-deploy/fractal-indexer/data/brc20`
+- `/opt/fractal-indexer-deploy/fractal-indexer/data/clickhouse`
+- `/opt/fractal-indexer-deploy/fractal-indexer/data/pika`
+- `/opt/fractal-indexer-deploy/fractal-indexer/data/pika-brc20`
+
+Publish a snapshot:
+
+```bash
+export AWS_ACCESS_KEY_ID="<write-capable-r2-access-key>"
+export AWS_SECRET_ACCESS_KEY="<write-capable-r2-secret-key>"
+
+scripts/upload-kopia-snapshots.sh 1775090
+```
+
+The script connects to the Kopia repository at bucket `kopia-repo`, endpoint
+`eccc9c966ad74b3b2b15c2961767d059.r2.cloudflarestorage.com`, prefix
+`fractald-pruned`, and tags snapshots with the height, dataset identity,
+`network:fractal-mainnet`, and `role:snapshot`.
+
 ## Changelog
 
 ### 20260602
@@ -179,4 +231,3 @@ docker-compose up -d
 
 1. Updated `stake-indexer` to version `v0.1.1`.
 2. Updated `stake-indexer/conf/indexer/config.yaml`.
-
