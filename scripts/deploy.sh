@@ -19,7 +19,8 @@ Without --snapshot, the script initializes configs and starts services without
 restoring Kopia snapshot data.
 
 Options:
-  --force                  Skip runtime data directory existence checks.
+  --force                  Skip runtime data directory existence checks. With
+                           --snapshot, restore snapshots with --delete-extra.
 
 Optional proof-publisher environment. If all are provided, proof-publisher
 will be started; otherwise config.json is generated but the service is not
@@ -35,6 +36,7 @@ EOF
 
 snapshot_height=""
 force=0
+original_args=("$@")
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -64,13 +66,13 @@ if [ -n "$snapshot_height" ]; then
   use_snapshot=1
 fi
 
-: "${AWS_ACCESS_KEY_ID:=d10a4a18c0d604d803049c94a01dace5}"
-if [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
-  require_command base64
-  AWS_SECRET_ACCESS_KEY="$(printf '%s' 'OTAyZTFiYmQ0NmUyOWQ3NTQxZTBhMzY5MmI0YTU2OGY3MmJmN2RiZmIyNzNiMmE0ZDkwMmI0ZmUzYjA5MGRmYg==' | base64 -d)"
+if [ "${EUID:-$(id -u)}" -ne 0 ]; then
+  require_command sudo
+  log "Re-running deploy script as root via sudo"
+  exec sudo -E bash "$0" "${original_args[@]}"
 fi
-export AWS_ACCESS_KEY_ID
-export AWS_SECRET_ACCESS_KEY
+
+load_default_readonly_r2_credentials
 
 require_command docker
 require_command jq
@@ -92,6 +94,9 @@ fi
 
 if [ "$force" -eq 1 ]; then
   warn "Skipping runtime data directory checks because --force was provided"
+  if [ "$use_snapshot" -eq 1 ]; then
+    warn "Snapshot restore will use --delete-extra for existing target directories"
+  fi
 else
   log "Checking runtime data directories"
   ensure_empty_or_missing "${REPO_ROOT}/fractald/data"
@@ -127,21 +132,15 @@ fi
 restore_dataset() {
   local dataset="$1"
   local target="$2"
-  local object_id tags_display
-  local tags=(
-    "network:fractal"
-    "role:snapshot"
-    "dataset:${dataset}"
-    "height:${snapshot_height}"
-  )
+  local object_id
+  local delete_extra=0
 
-  tags_display="$(IFS=,; printf '%s' "${tags[*]}")"
-  log "Resolving ${dataset} (${tags_display})"
-  object_id="$(kopia_snapshot_object_id "${tags[@]}")"
+  if [ "$force" -eq 1 ]; then
+    delete_extra=1
+  fi
 
-  mkdir -p "$(dirname "$target")"
-  log "Restoring ${dataset} to ${target}"
-  kopia snapshot restore "$object_id" "$target"
+  kopia_restore_snapshot_dataset "$snapshot_height" "$dataset" "$target" "$delete_extra"
+  object_id="$KOPIA_RESTORED_OBJECT_ID"
   printf '%s\t%s\t%s\n' "$dataset" "$object_id" "$target" >>"$restore_summary_file"
 }
 
@@ -171,9 +170,10 @@ if [ "$use_snapshot" -eq 1 ]; then
   log "Connecting Kopia repository as read-only"
   kopia_connect_s3 readonly
 
-  log "Restoring fractald snapshots"
+  log "Restoring snapshots"
   restore_dataset fractald-blocks "${REPO_ROOT}/fractald/data/blocks"
   restore_dataset fractald-chainstate "${REPO_ROOT}/fractald/data/chainstate"
+  restore_dataset fractal-indexer-data "${REPO_ROOT}/fractal-indexer/data"
 fi
 
 log "Initializing fractald directory ownership"
@@ -212,11 +212,6 @@ fi
 
 log "Generating fractal-indexer config"
 generate_fractal_indexer_chain_config "$rpc_user" "$rpc_password"
-
-if [ "$use_snapshot" -eq 1 ]; then
-  log "Restoring fractal-indexer snapshots"
-  restore_dataset fractal-indexer-data "${REPO_ROOT}/fractal-indexer/data"
-fi
 
 log "Initializing fractal-indexer"
 (

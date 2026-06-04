@@ -44,16 +44,15 @@ stop all services first and remove the runtime `data` directories before running
 the script again:
 
 ```bash
-docker-compose -f fractald/docker-compose.yaml down
-docker-compose -f fractal-indexer/docker-compose.yaml down
-docker-compose -f stake-indexer/docker-compose.yaml down
-docker-compose -f proof-publisher/docker-compose.yaml down
+scripts/stop.sh
 
 rm -rf fractald/data fractal-indexer/data stake-indexer/data proof-publisher/data
 ```
 
-The `--force` option only skips existing data directory checks; it does not
-delete or clean old data.
+The `--force` option skips existing data directory checks. When used with
+`--snapshot`, snapshot restore also enables Kopia `--delete-extra`, so files in
+the target data directories that are not present in the selected snapshot are
+deleted.
 
 The recommended quick start deploys from Kopia snapshots. This avoids syncing
 `fractald` and rebuilding `fractal-indexer` data from genesis.
@@ -98,6 +97,27 @@ Fractald exposes these container ports through Docker Compose:
 - RPC: `10332`
 - ZMQ raw block: `10330`
 - ZMQ raw transaction: `10331`
+
+## Restore One Snapshot Dataset
+
+Use `scripts/restore-kopia-snapshot.sh` to restore a single Kopia snapshot
+dataset by height, dataset name, and target directory:
+
+```bash
+scripts/restore-kopia-snapshot.sh \
+  --height=1820067 \
+  --dataset=fractald-blocks \
+  --target=fractald/data/blocks
+```
+
+By default, the restore script deletes files in the target directory that are not
+present in the snapshot. Add `--no-delete-extra` to keep extra files.
+
+Common datasets:
+
+- `fractald-blocks` to `fractald/data/blocks`
+- `fractald-chainstate` to `fractald/data/chainstate`
+- `fractal-indexer-data` to `fractal-indexer/data`
 
 ## Deploy Without Snapshots
 

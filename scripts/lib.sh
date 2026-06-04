@@ -13,21 +13,35 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 : "${UPLOAD_BASE_DIR:=/opt/fractal-indexer-deploy}"
 : "${KOPIA_CACHE_DIRECTORY:=${REPO_ROOT}/.kopia-cache}"
 
+load_default_readonly_r2_credentials() {
+  : "${AWS_ACCESS_KEY_ID:=d10a4a18c0d604d803049c94a01dace5}"
+  if [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+    require_command base64
+    AWS_SECRET_ACCESS_KEY="$(printf '%s' 'OTAyZTFiYmQ0NmUyOWQ3NTQxZTBhMzY5MmI0YTU2OGY3MmJmN2RiZmIyNzNiMmE0ZDkwMmI0ZmUzYjA5MGRmYg==' | base64 -d)"
+  fi
+  export AWS_ACCESS_KEY_ID
+  export AWS_SECRET_ACCESS_KEY
+}
+
+log_timestamp() {
+  date '+%Y-%m-%d %H:%M:%S'
+}
+
 log() {
-  printf '>>> %s\n' "$*"
+  printf '[%s] >>> %s\n' "$(log_timestamp)" "$*"
 }
 
 warn() {
-  printf 'WARN: %s\n' "$*" >&2
+  printf '[%s] WARN: %s\n' "$(log_timestamp)" "$*" >&2
 }
 
 die() {
-  printf 'ERROR: %s\n' "$*" >&2
+  printf '[%s] ERROR: %s\n' "$(log_timestamp)" "$*" >&2
   exit 1
 }
 
 usage_error() {
-  printf 'ERROR: %s\n\n' "$1" >&2
+  printf '[%s] ERROR: %s\n\n' "$(log_timestamp)" "$1" >&2
   usage >&2
   exit 2
 }
@@ -191,6 +205,35 @@ kopia_snapshot_object_id() {
   fi
 
   printf '%s\n' "$object_id"
+}
+
+kopia_restore_snapshot_dataset() {
+  local snapshot_height="$1"
+  local dataset="$2"
+  local target="$3"
+  local delete_extra="${4:-0}"
+  local object_id tags_display
+  local restore_args=(--skip-existing --write-files-atomically)
+  local tags=(
+    "network:fractal"
+    "role:snapshot"
+    "dataset:${dataset}"
+    "height:${snapshot_height}"
+  )
+
+  tags_display="$(IFS=,; printf '%s' "${tags[*]}")"
+  log "Resolving ${dataset} (${tags_display})"
+  object_id="$(kopia_snapshot_object_id "${tags[@]}")"
+
+  mkdir -p "$(dirname "$target")"
+  if [ "$delete_extra" -eq 1 ]; then
+    restore_args+=(--delete-extra)
+  fi
+
+  log "Restoring ${dataset} to ${target}"
+  kopia snapshot restore "$object_id" "$target" "${restore_args[@]}"
+
+  KOPIA_RESTORED_OBJECT_ID="$object_id"
 }
 
 sed_replacement_escape() {
