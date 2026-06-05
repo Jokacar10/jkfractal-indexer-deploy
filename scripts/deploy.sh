@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/deploy.sh [--snapshot=<height>] [--force] [--skip-init]
+  scripts/deploy.sh [--snapshot=<height>] [--force] [--skip-init-db]
 
 Snapshot restore environment:
   AWS_ACCESS_KEY_ID       Read-only Cloudflare R2 access key; defaults to bundled read-only key
@@ -21,8 +21,7 @@ restoring Kopia snapshot data.
 Options:
   --force                  Skip runtime data directory existence checks. With
                            --snapshot, restore snapshots with --delete-extra.
-  --skip-init              Skip all component init scripts. Use only when data
-                           directories, permissions, and local configs are ready.
+  --skip-init-db           Skip fractal-indexer DB initialization.
 
 Optional proof-publisher environment. If all are provided, proof-publisher
 will be started; otherwise config.json is generated but the service is not
@@ -38,7 +37,7 @@ EOF
 
 snapshot_height=""
 force=0
-skip_init=0
+skip_init_db=0
 original_args=("$@")
 
 while [ "$#" -gt 0 ]; do
@@ -49,8 +48,8 @@ while [ "$#" -gt 0 ]; do
     --force)
       force=1
       ;;
-    --skip-init)
-      skip_init=1
+    --skip-init-db)
+      skip_init_db=1
       ;;
     -h|--help)
       usage
@@ -91,6 +90,20 @@ if [ "$use_snapshot" -eq 1 ]; then
   require_env KOPIA_REPOSITORY_PASSWORD
 fi
 
+ensure_clickhouse_data_small_enough_for_db_init() {
+  local path="${REPO_ROOT}/fractal-indexer/data/clickhouse"
+  local max_size_mb=1024
+  local size_mb=0
+
+  if [ -d "$path" ]; then
+    size_mb="$(du -sm "$path" | awk '{print $1}')"
+  fi
+
+  if [ "$size_mb" -gt "$max_size_mb" ]; then
+    die "${path} is ${size_mb}M, greater than ${max_size_mb}M; refusing to run fractal-indexer init.sh db. If the DB is already initialized, rerun with --skip-init-db"
+  fi
+}
+
 log "Checking ports"
 if proof_publisher_can_start; then
   check_ports_free 10330 10331 10332 10333 8000 9637 9432 9379 8080
@@ -110,8 +123,8 @@ else
   ensure_empty_or_missing "${REPO_ROOT}/stake-indexer/data"
 fi
 
-if [ "$skip_init" -eq 1 ]; then
-  warn "--skip-init was provided; data directories, permissions, and local configs must already be ready"
+if [ "$skip_init_db" -eq 0 ]; then
+  ensure_clickhouse_data_small_enough_for_db_init
 fi
 
 load_fractald_rpc_credentials() {
@@ -154,20 +167,6 @@ restore_dataset() {
   printf '%s\t%s\t%s\n' "$dataset" "$object_id" "$target" >>"$restore_summary_file"
 }
 
-ensure_clickhouse_data_small_enough_for_db_init() {
-  local path="${REPO_ROOT}/fractal-indexer/data/clickhouse"
-  local max_size_mb=1024
-  local size_mb=0
-
-  if [ -d "$path" ]; then
-    size_mb="$(du -sm "$path" | awk '{print $1}')"
-  fi
-
-  if [ "$size_mb" -gt "$max_size_mb" ]; then
-    die "${path} is ${size_mb}M, greater than ${max_size_mb}M; refusing to run fractal-indexer init.sh db"
-  fi
-}
-
 restore_summary_file=""
 fractald_info_file=""
 fractald_rpc_error_file=""
@@ -183,19 +182,15 @@ initialize_fractal_indexer() {
     return
   fi
 
-  if [ "$skip_init" -eq 1 ]; then
-    warn "Skipping fractal-indexer init because --skip-init was provided"
-    fractal_indexer_initialized=1
-    return
-  fi
-
   log "Initializing fractal-indexer"
   (
     cd "${REPO_ROOT}/fractal-indexer"
     if [ "$use_snapshot" -eq 1 ]; then
       bash ./scripts/init.sh
+    elif [ "$skip_init_db" -eq 1 ]; then
+      warn "Skipping fractal-indexer DB initialization because --skip-init-db was provided"
+      bash ./scripts/init.sh
     else
-      ensure_clickhouse_data_small_enough_for_db_init
       bash ./scripts/init.sh db
     fi
   )
@@ -261,15 +256,11 @@ if [ "$use_snapshot" -eq 1 ]; then
   start_fractal_indexer_storage
 fi
 
-if [ "$skip_init" -eq 1 ]; then
-  warn "Skipping fractald init because --skip-init was provided"
-else
-  log "Initializing fractald directory ownership"
-  (
-    cd "${REPO_ROOT}/fractald"
-    bash ./scripts/init.sh
-  )
-fi
+log "Initializing fractald directory ownership"
+(
+  cd "${REPO_ROOT}/fractald"
+  bash ./scripts/init.sh
+)
 
 log "Starting fractald"
 run_compose "${REPO_ROOT}/fractald" up -d
@@ -308,29 +299,21 @@ start_fractal_indexer_storage
 log "Starting fractal-indexer indexer and API"
 run_compose "${REPO_ROOT}/fractal-indexer" up -d indexer api
 
-if [ "$skip_init" -eq 1 ]; then
-  warn "Skipping stake-indexer init because --skip-init was provided"
-else
-  log "Initializing stake-indexer"
-  (
-    cd "${REPO_ROOT}/stake-indexer"
-    bash ./scripts/init.sh
-  )
-fi
+log "Initializing stake-indexer"
+(
+  cd "${REPO_ROOT}/stake-indexer"
+  bash ./scripts/init.sh
+)
 generate_stake_indexer_chain_config "$rpc_user" "$rpc_password"
 
 log "Starting stake-indexer"
 run_compose "${REPO_ROOT}/stake-indexer" up -d
 
-if [ "$skip_init" -eq 1 ]; then
-  warn "Skipping proof-publisher init because --skip-init was provided"
-else
-  log "Initializing proof-publisher config"
-  (
-    cd "${REPO_ROOT}/proof-publisher"
-    bash ./scripts/init.sh
-  )
-fi
+log "Initializing proof-publisher config"
+(
+  cd "${REPO_ROOT}/proof-publisher"
+  bash ./scripts/init.sh
+)
 generate_proof_publisher_config "$rpc_user" "$rpc_password"
 
 if proof_publisher_can_start; then

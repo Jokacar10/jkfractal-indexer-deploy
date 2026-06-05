@@ -125,7 +125,7 @@ check_ports_free() {
 
   for port in "$@"; do
     if port_in_use "$port"; then
-      die "port ${port} is already in use"
+      die "port ${port} is already in use; If you need to redeploy, run scripts/stop.sh first"
     fi
   done
 }
