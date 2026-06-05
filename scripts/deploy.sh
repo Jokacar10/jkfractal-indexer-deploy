@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/deploy.sh [--snapshot=<height>] [--force]
+  scripts/deploy.sh [--snapshot=<height>] [--force] [--skip-init]
 
 Snapshot restore environment:
   AWS_ACCESS_KEY_ID       Read-only Cloudflare R2 access key; defaults to bundled read-only key
@@ -21,6 +21,8 @@ restoring Kopia snapshot data.
 Options:
   --force                  Skip runtime data directory existence checks. With
                            --snapshot, restore snapshots with --delete-extra.
+  --skip-init              Skip all component init scripts. Use only when data
+                           directories, permissions, and local configs are ready.
 
 Optional proof-publisher environment. If all are provided, proof-publisher
 will be started; otherwise config.json is generated but the service is not
@@ -36,6 +38,7 @@ EOF
 
 snapshot_height=""
 force=0
+skip_init=0
 original_args=("$@")
 
 while [ "$#" -gt 0 ]; do
@@ -45,6 +48,9 @@ while [ "$#" -gt 0 ]; do
       ;;
     --force)
       force=1
+      ;;
+    --skip-init)
+      skip_init=1
       ;;
     -h|--help)
       usage
@@ -104,6 +110,10 @@ else
   ensure_empty_or_missing "${REPO_ROOT}/stake-indexer/data"
 fi
 
+if [ "$skip_init" -eq 1 ]; then
+  warn "--skip-init was provided; data directories, permissions, and local configs must already be ready"
+fi
+
 load_fractald_rpc_credentials() {
   local config="${REPO_ROOT}/fractald/conf/bitcoin.conf"
 
@@ -161,10 +171,82 @@ ensure_clickhouse_data_small_enough_for_db_init() {
 restore_summary_file=""
 fractald_info_file=""
 fractald_rpc_error_file=""
+fractal_indexer_initialized=0
+fractal_indexer_storage_started=0
 restore_summary_file="$(mktemp)"
 fractald_info_file="$(mktemp)"
 fractald_rpc_error_file="$(mktemp)"
 trap 'rm -f "${restore_summary_file:-}" "${fractald_info_file:-}" "${fractald_rpc_error_file:-}"' EXIT
+
+initialize_fractal_indexer() {
+  if [ "$fractal_indexer_initialized" -eq 1 ]; then
+    return
+  fi
+
+  if [ "$skip_init" -eq 1 ]; then
+    warn "Skipping fractal-indexer init because --skip-init was provided"
+    fractal_indexer_initialized=1
+    return
+  fi
+
+  log "Initializing fractal-indexer"
+  (
+    cd "${REPO_ROOT}/fractal-indexer"
+    if [ "$use_snapshot" -eq 1 ]; then
+      bash ./scripts/init.sh
+    else
+      ensure_clickhouse_data_small_enough_for_db_init
+      bash ./scripts/init.sh db
+    fi
+  )
+  fractal_indexer_initialized=1
+}
+
+start_fractal_indexer_storage() {
+  if [ "$fractal_indexer_storage_started" -eq 1 ]; then
+    return
+  fi
+
+  log "Starting fractal-indexer storage services"
+  run_compose "${REPO_ROOT}/fractal-indexer" up -d clickhouse pika pika-brc20
+  wait_compose_service_ready "${REPO_ROOT}/fractal-indexer" clickhouse 120 10
+  wait_compose_service_ready "${REPO_ROOT}/fractal-indexer" pika 120 10
+  wait_compose_service_ready "${REPO_ROOT}/fractal-indexer" pika-brc20 120 10
+  fractal_indexer_storage_started=1
+}
+
+wait_compose_service_ready() {
+  local dir="$1"
+  local service="$2"
+  local attempts="$3"
+  local delay="$4"
+  local container_id status
+  local attempt
+
+  log "Waiting for ${service} to become healthy"
+  for attempt in $(seq 1 "$attempts"); do
+    container_id="$(run_compose "$dir" ps -q "$service" 2>/dev/null || true)"
+    if [ -n "$container_id" ]; then
+      status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id" 2>/dev/null || true)"
+      if [ "$status" = "healthy" ] || [ "$status" = "running" ]; then
+        log "${service} is ${status}"
+        return
+      fi
+    else
+      status="missing"
+    fi
+
+    if [ "$attempt" -eq "$attempts" ]; then
+      warn "${service} did not become healthy; last status: ${status}"
+      if [ -n "$container_id" ]; then
+        docker logs --tail=80 "$container_id" >&2 || true
+      fi
+      die "${service} did not become healthy"
+    fi
+
+    sleep "$delay"
+  done
+}
 
 if [ "$use_snapshot" -eq 1 ]; then
   log "Connecting Kopia repository as read-only"
@@ -174,18 +256,25 @@ if [ "$use_snapshot" -eq 1 ]; then
   restore_dataset fractald-blocks "${REPO_ROOT}/fractald/data/blocks"
   restore_dataset fractald-chainstate "${REPO_ROOT}/fractald/data/chainstate"
   restore_dataset fractal-indexer-data "${REPO_ROOT}/fractal-indexer/data"
+
+  initialize_fractal_indexer
+  start_fractal_indexer_storage
 fi
 
-log "Initializing fractald directory ownership"
-(
-  cd "${REPO_ROOT}/fractald"
-  bash ./scripts/init.sh
-)
+if [ "$skip_init" -eq 1 ]; then
+  warn "Skipping fractald init because --skip-init was provided"
+else
+  log "Initializing fractald directory ownership"
+  (
+    cd "${REPO_ROOT}/fractald"
+    bash ./scripts/init.sh
+  )
+fi
 
 log "Starting fractald"
 run_compose "${REPO_ROOT}/fractald" up -d
 
-log "Waiting for fractald RPC"
+log "Waiting for fractald RPC; this verifies restored blocks and chainstate can be opened"
 for attempt in $(seq 1 120); do
   if run_compose "${REPO_ROOT}/fractald" exec -T fractald bitcoin-cli --conf=/conf/bitcoin.conf getblockchaininfo >"$fractald_info_file" 2>"${fractald_rpc_error_file:-/dev/null}"; then
     log "fractald RPC response:"
@@ -213,38 +302,35 @@ fi
 log "Generating fractal-indexer config"
 generate_fractal_indexer_chain_config "$rpc_user" "$rpc_password"
 
-log "Initializing fractal-indexer"
-(
-  cd "${REPO_ROOT}/fractal-indexer"
-  if [ "$use_snapshot" -eq 1 ]; then
-    bash ./scripts/init.sh
-  else
-    ensure_clickhouse_data_small_enough_for_db_init
-    bash ./scripts/init.sh db
-  fi
-)
-
-log "Starting fractal-indexer storage services"
-run_compose "${REPO_ROOT}/fractal-indexer" up -d clickhouse pika pika-brc20
+initialize_fractal_indexer
+start_fractal_indexer_storage
 
 log "Starting fractal-indexer indexer and API"
 run_compose "${REPO_ROOT}/fractal-indexer" up -d indexer api
 
-log "Initializing stake-indexer"
-(
-  cd "${REPO_ROOT}/stake-indexer"
-  bash ./scripts/init.sh
-)
+if [ "$skip_init" -eq 1 ]; then
+  warn "Skipping stake-indexer init because --skip-init was provided"
+else
+  log "Initializing stake-indexer"
+  (
+    cd "${REPO_ROOT}/stake-indexer"
+    bash ./scripts/init.sh
+  )
+fi
 generate_stake_indexer_chain_config "$rpc_user" "$rpc_password"
 
 log "Starting stake-indexer"
 run_compose "${REPO_ROOT}/stake-indexer" up -d
 
-log "Initializing proof-publisher config"
-(
-  cd "${REPO_ROOT}/proof-publisher"
-  bash ./scripts/init.sh
-)
+if [ "$skip_init" -eq 1 ]; then
+  warn "Skipping proof-publisher init because --skip-init was provided"
+else
+  log "Initializing proof-publisher config"
+  (
+    cd "${REPO_ROOT}/proof-publisher"
+    bash ./scripts/init.sh
+  )
+fi
 generate_proof_publisher_config "$rpc_user" "$rpc_password"
 
 if proof_publisher_can_start; then
