@@ -63,6 +63,27 @@ have_docker_compose() {
   command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1
 }
 
+os_release_value() {
+  local key="$1"
+
+  if [ ! -f /etc/os-release ]; then
+    return
+  fi
+
+  . /etc/os-release
+  case "$key" in
+    ID)
+      printf '%s' "${ID:-}"
+      ;;
+    ID_LIKE)
+      printf '%s' "${ID_LIKE:-}"
+      ;;
+    VERSION_ID)
+      printf '%s' "${VERSION_ID:-}"
+      ;;
+  esac
+}
+
 missing_items=()
 
 command -v docker >/dev/null 2>&1 || missing_items+=(docker)
@@ -103,7 +124,7 @@ install_apt() {
     log "Configuring Kopia APT repository"
     install -d -m 0755 /etc/apt/keyrings
     curl -fsSL https://kopia.io/signing-key | gpg --batch --yes --dearmor -o /etc/apt/keyrings/kopia-keyring.gpg
-    printf '%s\n' 'deb [signed-by=/etc/apt/keyrings/kopia-keyring.gpg] http://packages.kopia.io/apt/ stable main' >/etc/apt/sources.list.d/kopia.list
+    printf '%s\n' 'deb [signed-by=/etc/apt/keyrings/kopia-keyring.gpg] https://packages.kopia.io/apt/ stable main' >/etc/apt/sources.list.d/kopia.list
     apt-get update
     DEBIAN_FRONTEND=noninteractive apt-get install -y kopia
   fi
@@ -128,7 +149,7 @@ install_yum_like() {
     cat >/etc/yum.repos.d/kopia.repo <<'EOF'
 [Kopia]
 name=Kopia
-baseurl=http://packages.kopia.io/rpm/stable/$basearch/
+baseurl=https://packages.kopia.io/rpm/stable/$basearch/
 gpgcheck=1
 enabled=1
 gpgkey=https://kopia.io/signing-key
@@ -169,6 +190,7 @@ install_docker_apt() {
 install_docker_yum_like() {
   local pm_cmd="$1"
   local config_manager=()
+  local os_id os_like os_version os_major docker_repo
 
   if [ "$pm_cmd" = "dnf" ]; then
     "$pm_cmd" install -y dnf-plugins-core
@@ -178,13 +200,53 @@ install_docker_yum_like() {
     config_manager=(yum-config-manager --add-repo)
   fi
 
+  os_id="$(os_release_value ID)"
+  os_like="$(os_release_value ID_LIKE)"
+  os_version="$(os_release_value VERSION_ID)"
+  os_major="${os_version%%.*}"
+
+  case " ${os_id} ${os_like} " in
+    *" fedora "*)
+      docker_repo="https://download.docker.com/linux/fedora/docker-ce.repo"
+      ;;
+    *" rhel "*|*" centos "*|*" rocky "*|*" almalinux "*|*" ol "*)
+      docker_repo="https://download.docker.com/linux/centos/docker-ce.repo"
+      ;;
+    *" amzn "*)
+      docker_repo=""
+      ;;
+    *)
+      docker_repo="https://download.docker.com/linux/centos/docker-ce.repo"
+      ;;
+  esac
+
+  log "Detected RPM distribution: ID=${os_id:-unknown} VERSION_ID=${os_version:-unknown} ID_LIKE=${os_like:-unknown}"
+
   log "Configuring Docker RPM repository"
   rm -f /etc/yum.repos.d/docker-ce.repo /etc/yum.repos.d/docker-ce-staging.repo
-  "${config_manager[@]}" https://download.docker.com/linux/centos/docker-ce.repo
+  if [ -n "$docker_repo" ]; then
+    log "Using Docker repository: ${docker_repo}"
+    "${config_manager[@]}" "$docker_repo"
+  else
+    warn "No official Docker CE repository configured for ${os_id:-unknown}; trying distribution packages"
+  fi
 
   log "Installing Docker packages with ${pm_cmd}"
-  "$pm_cmd" makecache
-  "$pm_cmd" install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  if [ -n "$docker_repo" ]; then
+    "$pm_cmd" makecache
+    if "$pm_cmd" install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
+      return
+    fi
+
+    warn "Docker CE package installation failed; trying distribution Docker packages"
+    warn "OS: ID=${os_id:-unknown} VERSION_ID=${os_version:-unknown} ID_LIKE=${os_like:-unknown} MAJOR=${os_major:-unknown}"
+    warn "Docker repo: ${docker_repo}"
+    "$pm_cmd" repolist all | sed 's/^/  /' >&2 || true
+    "$pm_cmd" list --showduplicates docker-ce docker-ce-cli docker-compose-plugin 2>/dev/null | sed 's/^/  /' >&2 || true
+  fi
+
+  "$pm_cmd" install -y docker docker-compose-plugin || \
+    die "failed to install Docker. Install Docker Engine with the Compose plugin manually, then rerun this script"
 }
 
 need_docker=0

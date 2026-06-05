@@ -20,3 +20,11 @@ rpcservertimeout=120
 
 zmqpubrawblock=tcp://0.0.0.0:10330
 zmqpubrawtx=tcp://0.0.0.0:10331
+
+# public fractald nodes
+addnode=150.5.172.100:8333
+addnode=150.5.169.165:8333
+addnode=49.51.68.155:8333
+addnode=43.153.79.99:8333
+addnode=162.62.125.48:8333
+addnode=162.62.117.245:8333

@@ -252,7 +252,7 @@ kopia_snapshot_object_id() {
 }
 
 kopia_latest_complete_snapshot_height() {
-  local required_datasets_csv="fractald-blocks,fractald-chainstate,fractal-indexer-data"
+  local required_datasets_csv="fractald-blocks,fractald-chainstate,fractal-indexer-data,stake-indexer-data"
   local height
 
   height="$(kopia_snapshot_json_by_tags "network:fractal" "role:snapshot" \

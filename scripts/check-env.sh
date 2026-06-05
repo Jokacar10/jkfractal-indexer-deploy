@@ -133,7 +133,6 @@ else
   check_ports_free 10333 8000 9637
 fi
 
-ensure_fractal_network
 check_port_publication_security
 
 if [ -n "$snapshot_height" ]; then

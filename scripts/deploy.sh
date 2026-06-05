@@ -168,34 +168,9 @@ else
   ensure_empty_or_missing "${REPO_ROOT}/stake-indexer/data"
 fi
 
-if [ "$skip_init_db" -eq 0 ]; then
+if [ "$use_snapshot" -eq 0 ] && [ "$skip_init_db" -eq 0 ]; then
   ensure_clickhouse_data_small_enough_for_db_init
 fi
-
-load_fractald_rpc_credentials() {
-  local config="${REPO_ROOT}/fractald/conf/bitcoin.conf"
-
-  rpc_user="$(sed -n 's/^[[:space:]]*rpcuser[[:space:]]*=[[:space:]]*//p' "$config" | head -n 1)"
-  rpc_password="$(sed -n 's/^[[:space:]]*rpcpassword[[:space:]]*=[[:space:]]*//p' "$config" | head -n 1)"
-
-  if [ -z "$rpc_user" ] || [ -z "$rpc_password" ]; then
-    die "${config} exists but rpcuser or rpcpassword is missing"
-  fi
-}
-
-rpc_user=""
-rpc_password=""
-fractald_config="${REPO_ROOT}/fractald/conf/bitcoin.conf"
-if [ -f "$fractald_config" ]; then
-  log "Loading fractald RPC credentials from existing config"
-  load_fractald_rpc_credentials
-else
-  rpc_user="fip101"
-  rpc_password="$(generate_password)"
-fi
-
-log "Generating fractald config"
-generate_fractald_config "$rpc_user" "$rpc_password" "$use_snapshot"
 
 restore_dataset() {
   local dataset="$1"
@@ -323,6 +298,7 @@ if [ "$use_snapshot" -eq 1 ]; then
   restore_dataset fractald-blocks "${REPO_ROOT}/fractald/data/blocks"
   restore_dataset fractald-chainstate "${REPO_ROOT}/fractald/data/chainstate"
   restore_dataset fractal-indexer-data "${REPO_ROOT}/fractal-indexer/data"
+  restore_dataset stake-indexer-data "${REPO_ROOT}/stake-indexer/data"
 
   if [ "$download_only" -eq 1 ]; then
     cat <<EOF
@@ -342,6 +318,31 @@ EOF
   initialize_stake_indexer
   start_stake_indexer_storage
 fi
+
+load_fractald_rpc_credentials() {
+  local config="${REPO_ROOT}/fractald/conf/bitcoin.conf"
+
+  rpc_user="$(sed -n 's/^[[:space:]]*rpcuser[[:space:]]*=[[:space:]]*//p' "$config" | head -n 1)"
+  rpc_password="$(sed -n 's/^[[:space:]]*rpcpassword[[:space:]]*=[[:space:]]*//p' "$config" | head -n 1)"
+
+  if [ -z "$rpc_user" ] || [ -z "$rpc_password" ]; then
+    die "${config} exists but rpcuser or rpcpassword is missing"
+  fi
+}
+
+rpc_user=""
+rpc_password=""
+fractald_config="${REPO_ROOT}/fractald/conf/bitcoin.conf"
+if [ -f "$fractald_config" ]; then
+  log "Loading fractald RPC credentials from existing config"
+  load_fractald_rpc_credentials
+else
+  rpc_user="fip101"
+  rpc_password="$(generate_password)"
+fi
+
+log "Generating fractald config"
+generate_fractald_config "$rpc_user" "$rpc_password" "$use_snapshot"
 
 log "Initializing fractald directory ownership"
 (
