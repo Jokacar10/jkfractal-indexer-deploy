@@ -13,10 +13,9 @@ services:
     restart: unless-stopped
     mem_limit: 4G
     ports:
-      - "9637:9637"
-    extra_hosts:
-      - fractald:host-gateway
-      - fractal-indexer:host-gateway
+      - "${BIND_HOST:-127.0.0.1}:9637:9637"
+    networks:
+      - fractal-indexer-fip101-net
     volumes:
       - ./conf/indexer:/data/conf:ro
     environment:
@@ -34,14 +33,14 @@ services:
     restart: always
     stop_grace_period: 10m
     shm_size: 1g
-    ports:
-      - "9432:5432"
     environment:
       POSTGRES_DB: stake_indexer
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: stake_indexer
     volumes:
       - ./data/pgdata:/var/lib/postgresql/data
+    networks:
+      - fractal-indexer-fip101-net
     command:
       - "-cmax_wal_size=8GB"
       - "-cshared_buffers=1GB"
@@ -60,11 +59,11 @@ services:
     image: redis:6.2.0-alpine
     restart: always
     stop_grace_period: 10m
-    ports:
-      - "9379:6379"
     volumes:
       - ./data/redis:/data
       - ./conf/redis:/conf:ro
+    networks:
+      - fractal-indexer-fip101-net
     command: ["redis-server", "/conf/redis.conf"]
     logging: *logging
     healthcheck:
@@ -74,3 +73,7 @@ services:
       retries: 3
       start_period: 3s
 
+networks:
+  fractal-indexer-fip101-net:
+    external: true
+    name: fractal-indexer-fip101-net

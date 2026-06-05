@@ -12,6 +12,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 : "${KOPIA_HOSTNAME:=fractalbitcoin-fip101}"
 : "${UPLOAD_BASE_DIR:=/opt/fractal-indexer-deploy}"
 : "${KOPIA_CACHE_DIRECTORY:=${REPO_ROOT}/.kopia-cache}"
+FRACTAL_NETWORK_NAME="fractal-indexer-fip101-net"
 
 load_default_readonly_r2_credentials() {
   : "${AWS_ACCESS_KEY_ID:=d10a4a18c0d604d803049c94a01dace5}"
@@ -91,6 +92,54 @@ run_compose() {
     cd "$dir"
     "${COMPOSE_CMD[@]}" "$@"
   )
+}
+
+ensure_fractal_network() {
+  require_command docker
+
+  if docker network inspect "$FRACTAL_NETWORK_NAME" >/dev/null 2>&1; then
+    log "Docker network ${FRACTAL_NETWORK_NAME} already exists"
+    return
+  fi
+
+  log "Creating Docker network ${FRACTAL_NETWORK_NAME}"
+  docker network create "$FRACTAL_NETWORK_NAME" >/dev/null
+}
+
+compose_config_text() {
+  local dir="$1"
+
+  compose_cmd_array
+  (
+    cd "$dir"
+    "${COMPOSE_CMD[@]}" config
+  )
+}
+
+check_compose_public_ports() {
+  local dir="$1"
+  local name="$2"
+  local sensitive_ports="$3"
+  local config
+
+  config="$(compose_config_text "$dir")"
+
+  if printf '%s\n' "$config" | grep -Eq 'target: "?('"$sensitive_ports"')"?'; then
+    die "${name} publishes a sensitive container port (${sensitive_ports}); keep RPC, ZMQ, database, and cache ports internal to ${FRACTAL_NETWORK_NAME}"
+  fi
+
+  if printf '%s\n' "$config" | grep -Eq 'host_ip: "?0\.0\.0\.0"?'; then
+    warn "${name} has ports bound to 0.0.0.0; ensure this is intentional and protected by firewall/security groups"
+  fi
+}
+
+check_port_publication_security() {
+  log "Checking Docker Compose port exposure"
+  check_compose_public_ports "${REPO_ROOT}/fractald" fractald '10330|10331|10332'
+  check_compose_public_ports "${REPO_ROOT}/fractal-indexer" fractal-indexer '9000|9221|9222'
+  check_compose_public_ports "${REPO_ROOT}/stake-indexer" stake-indexer '5432|6379|9432|9379'
+  check_compose_public_ports "${REPO_ROOT}/proof-publisher" proof-publisher '10330|10331|10332|9000|9221|9222|5432|6379'
+  log "Sensitive ports stay inside Docker network ${FRACTAL_NETWORK_NAME}; public endpoints bind to BIND_HOST=${BIND_HOST:-127.0.0.1}"
 }
 
 port_in_use() {

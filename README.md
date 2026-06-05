@@ -19,10 +19,13 @@ Upstream project repositories:
 
 ## Service Endpoints
 
-- Fractald RPC: `http://localhost:10332`
 - Fractal indexer API: `http://localhost:8000`
 - Stake indexer API: `http://localhost:9637`
 - Proof publisher health: `http://localhost:8080/healthz`
+
+Fractald RPC and ZMQ ports are internal-only by default and are reachable by
+containers on the shared Docker network as `fractald:10332`, `fractald:10330`,
+and `fractald:10331`.
 
 ## Prerequisites
 
@@ -106,12 +109,43 @@ When deploying with `--snapshot`, the script restores the Fractald `blocks` and
 `chainstate` datasets before starting the node, then waits until Fractald RPC
 responds successfully.
 
-Fractald exposes these container ports through Docker Compose:
+Fractald exposes these container ports only on the shared Docker network by
+default:
 
-- P2P: `10333`
 - RPC: `10332`
 - ZMQ raw block: `10330`
 - ZMQ raw transaction: `10331`
+
+The P2P port `10333` is published publicly by default.
+
+## Network And Port Security
+
+The compose stacks use a shared external Docker network named
+`fractal-indexer-fip101-net`.
+
+`scripts/deploy.sh` creates this network before starting services. For manual
+service deployment, create it first:
+
+```bash
+docker network create fractal-indexer-fip101-net
+```
+
+Internal services do not publish host ports:
+
+- Fractald RPC and ZMQ: `10332`, `10330`, `10331`
+- ClickHouse: `9000`
+- Pika: `9221`
+- PostgreSQL: `5432`
+- Redis: `6379`
+
+Public endpoints bind to `127.0.0.1` by default:
+
+- Fractal indexer API: `8000`
+- Stake indexer API: `9637`
+- Proof publisher health/API: `8080`
+
+Set `BIND_HOST=0.0.0.0` only when these APIs must be reachable from outside the
+host and the network perimeter is already protected.
 
 ## Restore One Snapshot Dataset
 
@@ -232,7 +266,7 @@ cp config.example.json config.json
 Edit `config.json` and set the Fractald RPC credentials, signing key, change
 address, reward address, indexer name, and UniSat Open API key. The default
 `state_api.base_url` is `http://fractal-indexer:8000`, which points to the
-Fractal indexer API through Docker host mapping.
+Fractal indexer API on the shared Docker network.
 
 Then start it:
 

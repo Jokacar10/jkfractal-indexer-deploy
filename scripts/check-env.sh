@@ -128,10 +128,13 @@ done
 
 log "Checking service ports"
 if proof_publisher_can_start; then
-  check_ports_free 10330 10331 10332 10333 8000 9637 9432 9379 8080
+  check_ports_free 10333 8000 9637 8080
 else
-  check_ports_free 10330 10331 10332 10333 8000 9637 9432 9379
+  check_ports_free 10333 8000 9637
 fi
+
+ensure_fractal_network
+check_port_publication_security
 
 if [ -n "$snapshot_height" ]; then
   log "Snapshot resource requirement for single-host, same-disk deployment: disk ${SNAPSHOT_MIN_DISK_GIB} GiB+, memory ${SNAPSHOT_MIN_MEM_GIB} GiB+"

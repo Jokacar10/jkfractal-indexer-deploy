@@ -5,8 +5,8 @@
 ## Components
 
 - `indexer`: stake indexing API on port `9637`
-- `postgres`: primary relational store on port `9432`
-- `redis`: auxiliary cache and state store on port `9379`
+- `postgres`: primary relational store on internal port `5432`
+- `redis`: auxiliary cache and state store on internal port `6379`
 
 ## Directory Layout
 
@@ -46,7 +46,8 @@ state_api_base_url: http://fractal-indexer:8000
 state_api_timeout: 5s
 ```
 
-`docker-compose.yaml` maps `fractal-indexer` to the Docker host with `extra_hosts: fractal-indexer:host-gateway`. Keep this value if the Fractal indexer API is published on the host at port `8000`; otherwise update it to the correct reachable address.
+`fractal-indexer` and `fractald` are reached through Docker DNS on the shared
+external network `fractal-indexer-fip101-net`.
 
 ## Manual Deployment
 
@@ -63,6 +64,7 @@ node. If needed, edit `conf/indexer/config.yaml` so `state_api_base_url` points
 to your Fractal indexer API. Then initialize and start the stack:
 
 ```bash
+docker network create fractal-indexer-fip101-net
 bash ./scripts/init.sh
 docker compose up -d
 ```
@@ -93,5 +95,7 @@ docker compose logs --tail=100 -f indexer postgres redis
 Endpoints:
 
 - Stake API: `http://localhost:9637`
-- PostgreSQL: `localhost:9432`
-- Redis: `localhost:9379`
+
+PostgreSQL and Redis are internal-only by default. The Stake API binds to
+`127.0.0.1` by default. Set `BIND_HOST=0.0.0.0` only when external access is
+required and the host firewall/security group is configured.

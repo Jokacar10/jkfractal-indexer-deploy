@@ -40,7 +40,8 @@ Edit `conf/indexer/chain.yaml` and set:
 - `rpc`
 - `rpc_auth`
 
-The example uses `fractald` as the node hostname. `docker-compose.yaml` maps `fractald` to the Docker host with `extra_hosts: fractald:host-gateway`, so this works when the Fractal node is reachable from the host. Change the host or ports if your node is elsewhere.
+The example uses `fractald` as the node hostname. This works when `fractald` is
+attached to the shared external Docker network `fractal-indexer-fip101-net`.
 
 ## Manual Deployment
 
@@ -57,6 +58,7 @@ point to your Fractald node. Then prepare local data, initialize the DB, and
 start the indexer:
 
 ```bash
+docker network create fractal-indexer-fip101-net
 bash ./scripts/init.sh db
 docker compose up -d
 ```
@@ -99,5 +101,8 @@ docker compose logs --tail=100 -f indexer api
 API endpoint:
 
 - `http://localhost:8000`
+
+The API port binds to `127.0.0.1` by default. Set `BIND_HOST=0.0.0.0` only when
+external access is required and the host firewall/security group is configured.
 
 The API may take time to become ready after startup because it needs to load indexed data first.

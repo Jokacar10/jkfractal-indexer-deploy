@@ -8,11 +8,14 @@ services:
     environment:
       PUBLISHER_CONFIG: /app/config/config.json
     ports:
-      - "8080:8080"
+      - "${BIND_HOST:-127.0.0.1}:8080:8080"
     volumes:
       - ./config.json:/app/config/config.json:ro
       - ./data:/app/data
-    extra_hosts:
-      - "fractald:host-gateway"
-      - "fractal-indexer:host-gateway"
+    networks:
+      - fractal-indexer-fip101-net
 
+networks:
+  fractal-indexer-fip101-net:
+    external: true
+    name: fractal-indexer-fip101-net

@@ -13,10 +13,8 @@ stacks because it holds signing material and can broadcast transactions.
 - A signing private key and change address
 - A UniSat Open API key when using the default `unisat_open_api` mode
 
-`docker-compose.yaml` maps `fractald` and `fractal-indexer` to the Docker host
-with `extra_hosts`. Keep these defaults when Fractald and the Fractal indexer
-API are published on the host. Otherwise, update `config.json` and the compose
-host mappings.
+The default compose file expects Fractald and the Fractal indexer API to be
+attached to the shared external Docker network `fractal-indexer-fip101-net`.
 
 ## Configuration
 
@@ -70,6 +68,7 @@ address, indexer name, and UniSat Open API key. Then initialize and start the
 publisher:
 
 ```bash
+docker network create fractal-indexer-fip101-net
 bash ./scripts/init.sh
 docker compose up -d
 ```
@@ -89,6 +88,10 @@ docker compose logs --tail=100 -f proof-publisher
 curl -s http://localhost:8080/healthz
 curl -s http://localhost:8080/status
 ```
+
+The health/API port binds to `127.0.0.1` by default. Set `BIND_HOST=0.0.0.0`
+only when external access is required and the host firewall/security group is
+configured.
 
 ## Notes
 

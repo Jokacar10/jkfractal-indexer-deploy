@@ -47,6 +47,12 @@ or connection failures. When editing chain connectivity, verify generated
 `chain.yaml` files against the target Fractal node RPC and ZMQ endpoints before
 starting indexers.
 
+All service stacks join the shared external Docker network
+`fractal-indexer-fip101-net`. Internal services should communicate through
+Docker DNS names such as `fractald`, `fractal-indexer`, `clickhouse`, `pika`,
+`postgres`, and `redis`. Do not publish RPC, ZMQ, database, or cache ports to
+the host unless explicitly required and reviewed.
+
 ## Commit & Pull Request Guidelines
 Use short imperative commit subjects, ideally scoped by area, for example
 `scripts: add environment checks` or `fractald: update compose config`. PRs

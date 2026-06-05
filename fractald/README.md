@@ -1,8 +1,8 @@
 # Fractald
 
 `fractald` deploys a Fractal Bitcoin node for the local indexer stacks. It
-publishes RPC and ZMQ ports used by `fractal-indexer`, `stake-indexer`, and the
-optional `proof-publisher`.
+serves RPC and ZMQ traffic to `fractal-indexer`, `stake-indexer`, and the
+optional `proof-publisher` on the shared Docker network.
 
 ## Directory Layout
 
@@ -39,7 +39,7 @@ The default ports are:
 - RPC: `10332`
 
 These defaults match the indexer examples, where other Compose stacks reach the
-node through Docker host mapping as `fractald`.
+node through Docker DNS as `fractald`.
 
 ## Manual Deployment
 
@@ -55,6 +55,7 @@ Edit `conf/bitcoin.conf`, set `rpcuser` and `rpcpassword`, then initialize and
 start the stack:
 
 ```bash
+docker network create fractal-indexer-fip101-net
 bash ./scripts/init.sh
 docker compose up -d
 ```
@@ -81,5 +82,8 @@ docker compose logs --tail=100 -f fractald
 docker compose exec fractald bitcoin-cli --conf=/conf/bitcoin.conf getblockchaininfo
 ```
 
-RPC is available on `http://localhost:10332` with the credentials configured in
-`conf/bitcoin.conf`.
+RPC and ZMQ are internal-only by default and are available to containers on the
+shared Docker network as `fractald:10332`, `fractald:10330`, and
+`fractald:10331`.
+
+The P2P port `10333` is published publicly by default.

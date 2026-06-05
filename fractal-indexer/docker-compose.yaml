@@ -19,8 +19,8 @@ services:
       MAX_REORG_BLOCKS: 100
     volumes:
       - ./conf/indexer:/data/conf:ro
-    extra_hosts:
-      - fractald:host-gateway
+    networks:
+      - fractal-indexer-fip101-net
     depends_on:
       clickhouse:
         condition: service_healthy
@@ -33,12 +33,14 @@ services:
     restart: "unless-stopped"
     command: ["-api"]
     ports:
-      - "8000:8000"
+      - "${BIND_HOST:-127.0.0.1}:8000:8000"
     volumes:
       - ./conf/indexer:/data/conf:ro
       - ./data/brc20:/data/data
-    extra_hosts:
-      - fractald:host-gateway
+    networks:
+      fractal-indexer-fip101-net:
+        aliases:
+          - fractal-indexer
     environment:
       LISTEN: 0.0.0.0:8000
       GIN_MODE: release
@@ -76,6 +78,8 @@ services:
     volumes:
       - ./data/clickhouse:/var/lib/clickhouse
       - ./logs/clickhouse:/var/log/clickhouse-server
+    networks:
+      - fractal-indexer-fip101-net
     healthcheck:
       test: ["CMD", "clickhouse-client", "--query=select 1"]
       interval: 60s
@@ -90,13 +94,13 @@ services:
     stop_grace_period: 2h
     restart: always
     mem_limit: 16G
-    ports:
-      - 9221:9221
     volumes:
       - ./logs/pika:/pika/log
       - ./conf/pika:/pika/conf:ro
       - ./data/pika/db:/pika/db
       - ./data/pika/dump:/pika/dump
+    networks:
+      - fractal-indexer-fip101-net
     healthcheck:
       test: ["CMD-SHELL", "ls -l /proc/1/fd | grep 'socket:'"]
       interval: 30s
@@ -111,12 +115,12 @@ services:
     stop_grace_period: 2h
     restart: always
     mem_limit: 16G
-    ports:
-      - 9222:9221
     volumes:
       - ./logs/pika-brc20:/pika/log
       - ./data/pika-brc20/db:/pika/db
       - ./data/pika-brc20/dump:/pika/dump
+    networks:
+      - fractal-indexer-fip101-net
     healthcheck:
       test: ["CMD-SHELL", "ls -l /proc/1/fd | grep 'socket:'"]
       interval: 30s
@@ -124,3 +128,8 @@ services:
       retries: 3
       start_period: 3s
     logging: *logging
+
+networks:
+  fractal-indexer-fip101-net:
+    external: true
+    name: fractal-indexer-fip101-net

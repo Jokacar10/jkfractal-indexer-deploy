@@ -101,6 +101,8 @@ load_default_readonly_r2_credentials
 require_command docker
 require_command jq
 compose_cmd >/dev/null
+ensure_fractal_network
+check_port_publication_security
 
 if [ "$use_snapshot" -eq 1 ]; then
   require_command kopia
@@ -125,9 +127,9 @@ ensure_clickhouse_data_small_enough_for_db_init() {
 
 log "Checking ports"
 if proof_publisher_can_start; then
-  check_ports_free 10330 10331 10332 10333 8000 9637 9432 9379 8080
+  check_ports_free 10333 8000 9637 8080
 else
-  check_ports_free 10330 10331 10332 10333 8000 9637 9432 9379
+  check_ports_free 10333 8000 9637
 fi
 
 if [ "$force" -eq 1 ]; then
@@ -370,4 +372,7 @@ ${snapshot_summary}
 Fractal indexer API: http://localhost:8000
 Stake indexer API: http://localhost:9637
 Proof publisher: http://localhost:8080
+
+Docker network: ${FRACTAL_NETWORK_NAME}
+Public bind host: ${BIND_HOST:-127.0.0.1}
 EOF
