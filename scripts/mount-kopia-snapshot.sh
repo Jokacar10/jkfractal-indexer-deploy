@@ -15,6 +15,7 @@ Mounts snapshot datasets under <target-dir>:
   fractald/blocks
   fractald/chainstate
   fractal-indexer/data
+  stake-indexer/data
 
 Example:
   scripts/mount-kopia-snapshot.sh 1820067 snapshot/1820067
@@ -76,6 +77,7 @@ unmount_path() {
 
 cleanup() {
   set +e
+  unmount_path "${target_root}/stake-indexer/data"
   unmount_path "${target_root}/fractal-indexer/data"
   unmount_path "${target_root}/fractald/chainstate"
   unmount_path "${target_root}/fractald/blocks"
@@ -147,6 +149,7 @@ trap 'cleanup; exit 143' TERM
 mount_dataset fractald-blocks "${target_root}/fractald/blocks"
 mount_dataset fractald-chainstate "${target_root}/fractald/chainstate"
 mount_dataset fractal-indexer-data "${target_root}/fractal-indexer/data"
+mount_dataset stake-indexer-data "${target_root}/stake-indexer/data"
 
 cat <<EOF
 

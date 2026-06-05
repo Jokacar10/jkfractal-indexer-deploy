@@ -23,6 +23,7 @@ Available datasets:
   fractald-blocks         Suggested target: fractald/data/blocks
   fractald-chainstate     Suggested target: fractald/data/chainstate
   fractal-indexer-data    Suggested target: fractal-indexer/data
+  stake-indexer-data      Suggested target: stake-indexer/data
 
 Snapshot restore environment:
   AWS_ACCESS_KEY_ID       Read-only Cloudflare R2 access key; defaults to bundled read-only key.

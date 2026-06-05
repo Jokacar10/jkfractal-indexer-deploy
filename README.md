@@ -2,10 +2,10 @@
 
 This repository provides Docker Compose deployments for Fractal network services:
 
-- `fractald/`: runs the Fractal node used by the indexers
-- `fractal-indexer/`: indexes BRC20 data and exposes a query API
-- `stake-indexer/`: indexes staking data and depends on the Fractal indexer API
-- `proof-publisher/`: optional proof submission daemon that publishes `register` and `prove` inscriptions
+- `fractald/`: runs the Fractal node used by the indexers.
+- `fractal-indexer/`: indexes BRC20 data and exposes a query API.
+- `stake-indexer/`: indexes staking data and depends on the Fractal indexer API.
+- `proof-publisher/`: optional proof submission daemon that publishes `register` and `prove` inscriptions.
 
 The top-level deploy script orchestrates these stacks. Each service directory
 also contains its own Docker Compose files and initialization scripts.
@@ -23,7 +23,7 @@ Upstream project repositories:
 - Stake indexer API: `http://localhost:9637`
 - Proof publisher health: `http://localhost:8080/healthz`
 
-Fractald RPC and ZMQ ports are internal-only by default and are reachable by
+`fractald` RPC and ZMQ ports are internal-only by default and are reachable by
 containers on the shared Docker network as `fractald:10332`, `fractald:10330`,
 and `fractald:10331`.
 
@@ -35,19 +35,29 @@ install the required deployment tools automatically.
 The deployment scripts support `apt-get`, `dnf`, and `yum` based systems. For
 manual installation, use these official documents:
 
-- Docker with Docker Compose
-- `jq`, See the official installation guide: [https://jqlang.org/download/](https://jqlang.org/download/)
-- `kopia`, required for snapshot restore. See the official Kopia installation guide: [kopia.io/docs/installation](https://kopia.io/docs/installation/)
+- Docker Engine with the Docker Compose plugin: [docs.docker.com/engine/install](https://docs.docker.com/engine/install/)
+- `jq`: [jqlang.org/download](https://jqlang.org/download/)
+- `kopia`, required for snapshot restore: [kopia.io/docs/installation](https://kopia.io/docs/installation/)
 - `rsync`
 
-`scripts/mount-kopia-snapshot.sh` also requires FUSE. It checks for FUSE but
-does not install it automatically.
+`scripts/mount-kopia-snapshot.sh` also requires FUSE. The script checks for
+FUSE and prints manual installation instructions when it is missing.
 
 ## Resource Requirements
 
 - `fractald`: disk `400 GB+`, minimum memory `8 GB`, recommended memory `16 GB`
 - `fractal-indexer`: disk `400 GB+`, minimum memory `48 GB`, recommended memory `96 GB`
 - Single-host snapshot deployment on the same disk: disk `800 GB+`, minimum memory `64 GB`
+
+## Run Quickly with an AI Agent
+
+You can use an AI agent to deploy this stack on your server. Ask the agent to:
+
+```text
+Read https://github.com/fractal-bitcoin/fractal-indexer-deploy, install the
+required dependencies, and deploy the Fractal indexer stack with
+scripts/deploy.sh --snapshot=latest.
+```
 
 ## Quick Start
 
@@ -65,23 +75,22 @@ The `--force` option skips existing data directory checks. When used with
 the target data directories that are not present in the selected snapshot are
 deleted.
 
-The recommended quick start deploys from Kopia snapshots. This avoids syncing
-`fractald` and rebuilding `fractal-indexer` data from genesis.
-
-The current default snapshot height is `1820067`:
+The recommended quick start deploys from Kopia snapshots. `--snapshot=latest`
+selects the highest complete snapshot height and avoids syncing `fractald` and
+rebuilding index data from genesis.
 
 ```bash
 git clone https://github.com/fractal-bitcoin/fractal-indexer-deploy
 cd fractal-indexer-deploy
 
-scripts/deploy.sh --snapshot=1820067
+scripts/deploy.sh --snapshot=latest
 ```
 
-For non-interactive non-snapshot deployment, add `--yes` to confirm deployment
-warnings automatically:
+To restore snapshot data only and skip config initialization and service
+startup:
 
 ```bash
-scripts/deploy.sh --snapshot=1820067 --yes
+scripts/deploy.sh --snapshot=latest --download-only
 ```
 
 The deploy script starts `fractald`, `fractal-indexer`, and `stake-indexer`, and
@@ -98,18 +107,18 @@ directory:
 - `stake-indexer`: [stake-indexer/README.md](stake-indexer/README.md)
 - `proof-publisher`: [proof-publisher/README.md](proof-publisher/README.md)
 
-## Fractald Deployment
+## `fractald` Deployment
 
 `fractald` is started by `scripts/deploy.sh` before the indexers. The script
 generates `fractald/conf/bitcoin.conf` with RPC credentials on first run. If
 `fractald/conf/bitcoin.conf` already exists, the script reads the existing
 `rpcuser` and `rpcpassword` and reuses them for all generated indexer configs.
 
-When deploying with `--snapshot`, the script restores the Fractald `blocks` and
-`chainstate` datasets before starting the node, then waits until Fractald RPC
-responds successfully.
+When deploying with `--snapshot`, the script restores the `fractald` `blocks`
+and `chainstate` datasets before starting the node, then waits until `fractald`
+RPC responds successfully.
 
-Fractald exposes these container ports only on the shared Docker network by
+`fractald` exposes these container ports only on the shared Docker network by
 default:
 
 - RPC: `10332`
@@ -118,9 +127,9 @@ default:
 
 The P2P port `10333` is published publicly by default.
 
-## Network And Port Security
+## Network and Port Security
 
-The compose stacks use a shared external Docker network named
+The Docker Compose stacks use a shared external Docker network named
 `fractal-indexer-fip101-net`.
 
 `scripts/deploy.sh` creates this network before starting services. For manual
@@ -132,7 +141,7 @@ docker network create fractal-indexer-fip101-net
 
 Internal services do not publish host ports:
 
-- Fractald RPC and ZMQ: `10332`, `10330`, `10331`
+- `fractald` RPC and ZMQ: `10332`, `10330`, `10331`
 - ClickHouse: `9000`
 - Pika: `9221`
 - PostgreSQL: `5432`
@@ -149,8 +158,8 @@ host and the network perimeter is already protected.
 
 ## Restore One Snapshot Dataset
 
-Use `scripts/restore-kopia-snapshot.sh` to restore a single Kopia snapshot
-dataset by height, dataset name, and target directory:
+Use `scripts/restore-kopia-snapshot.sh` to restore one Kopia snapshot dataset by
+numeric height, dataset name, and target directory:
 
 ```bash
 scripts/restore-kopia-snapshot.sh \
@@ -167,11 +176,12 @@ Common datasets:
 - `fractald-blocks` to `fractald/data/blocks`
 - `fractald-chainstate` to `fractald/data/chainstate`
 - `fractal-indexer-data` to `fractal-indexer/data`
+- `stake-indexer-data` to `stake-indexer/data`
 
 ## Mount Snapshot Datasets
 
-Use `scripts/mount-kopia-snapshot.sh` to mount snapshot datasets under a target
-directory:
+Use `scripts/mount-kopia-snapshot.sh` to mount all snapshot datasets under a
+target directory:
 
 ```bash
 scripts/mount-kopia-snapshot.sh 1820067 snapshot/1820067
@@ -182,9 +192,10 @@ The mounted directory contains:
 - `fractald/blocks`
 - `fractald/chainstate`
 - `fractal-indexer/data`
+- `stake-indexer/data`
 
-This script requires FUSE. If FUSE is missing, the script prints the manual
-installation command and exits.
+This script requires FUSE. If FUSE is missing, the script prints manual
+installation instructions and exits.
 
 ## Deploy Without Snapshots
 
@@ -194,10 +205,11 @@ You can run the deploy script without `--snapshot`:
 scripts/deploy.sh
 ```
 
-Without snapshots, Fractald must sync from genesis and `fractal-indexer` must
-build its data from the beginning. This can take a long time.
+Without snapshots, `fractald` must sync from genesis, `fractal-indexer` must
+build its data from the beginning, and `stake-indexer` must build its
+PostgreSQL and Redis data from the beginning. This can take a long time.
 
-Before running without snapshots, consider removing the Fractald `prune`
+Before running without snapshots, consider removing the `fractald` `prune`
 configuration from `fractald/conf/bitcoin.conf` or
 `fractald/conf/bitcoin.conf.example`. Running `fractal-indexer` against a pruned
 node may cause indexing failures.
@@ -223,7 +235,7 @@ checks:
 
 Snapshot deployment enforces the combined single-host requirement:
 `800 GiB+` available disk and `64 GiB+` memory.
-Non-snapshot deployment prints the heavier full-sync requirements and requires
+Non-snapshot deployment prints the heavier full-sync requirements and asks for
 confirmation.
 
 ## Dependency Installation
@@ -263,7 +275,7 @@ cd proof-publisher
 cp config.example.json config.json
 ```
 
-Edit `config.json` and set the Fractald RPC credentials, signing key, change
+Edit `config.json` and set the `fractald` RPC credentials, signing key, change
 address, reward address, indexer name, and UniSat Open API key. The default
 `state_api.base_url` is `http://fractal-indexer:8000`, which points to the
 Fractal indexer API on the shared Docker network.

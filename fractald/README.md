@@ -55,7 +55,6 @@ Edit `conf/bitcoin.conf`, set `rpcuser` and `rpcpassword`, then initialize and
 start the stack:
 
 ```bash
-docker network create fractal-indexer-fip101-net
 bash ./scripts/init.sh
 docker compose up -d
 ```

@@ -58,7 +58,6 @@ point to your Fractald node. Then prepare local data, initialize the DB, and
 start the indexer:
 
 ```bash
-docker network create fractal-indexer-fip101-net
 bash ./scripts/init.sh db
 docker compose up -d
 ```

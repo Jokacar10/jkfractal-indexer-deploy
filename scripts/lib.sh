@@ -251,6 +251,62 @@ kopia_snapshot_object_id() {
   printf '%s\n' "$object_id"
 }
 
+kopia_latest_complete_snapshot_height() {
+  local required_datasets_csv="fractald-blocks,fractald-chainstate,fractal-indexer-data"
+  local height
+
+  height="$(kopia_snapshot_json_by_tags "network:fractal" "role:snapshot" \
+    | jq -er --arg required "$required_datasets_csv" '
+      def entries:
+        if type == "array" then flatten else [.] end;
+
+      def tag_value($key):
+        if (.tags // null) == null then
+          empty
+        elif (.tags | type) == "object" then
+          .tags[$key] // .tags["tag:" + $key] // empty
+        elif (.tags | type) == "array" then
+          (.tags[]
+            | if type == "string" then
+                select(startswith($key + ":") or startswith("tag:" + $key + ":"))
+                | sub("^tag:" + $key + ":"; "")
+                | sub("^" + $key + ":"; "")
+              elif type == "object" then
+                .[$key] // .["tag:" + $key] // empty
+              else
+                empty
+              end)
+        else
+          empty
+        end;
+
+      ($required | split(",")) as $required_datasets
+      | entries
+      | map({
+          height: (tag_value("height") | tostring),
+          dataset: (tag_value("dataset") | tostring),
+          object: (.rootEntry.obj // empty),
+          incomplete: (.incomplete // .rootEntry.incomplete // .rootEntry.summ.incomplete // "")
+        })
+      | map(select(.object != "" and .incomplete == "" and (.height | test("^[0-9]+$")) and (.dataset != "")))
+      | group_by(.height)
+      | map({
+          height: .[0].height,
+          datasets: (map(.dataset) | unique)
+        })
+      | map(select(($required_datasets - .datasets) | length == 0))
+      | sort_by(.height | tonumber)
+      | last
+      | .height // empty
+    ' || true)"
+
+  if [ -z "$height" ] || [ "$height" = "null" ]; then
+    die "no complete snapshot height found for required datasets: ${required_datasets_csv}"
+  fi
+
+  printf '%s\n' "$height"
+}
+
 kopia_restore_snapshot_dataset() {
   local snapshot_height="$1"
   local dataset="$2"
@@ -306,12 +362,22 @@ generate_from_template() {
 generate_fractald_config() {
   local user="$1"
   local password="$2"
+  local keep_prune="${3:-1}"
   local template="${REPO_ROOT}/fractald/conf/bitcoin.conf.example"
   local target="${REPO_ROOT}/fractald/conf/bitcoin.conf"
+  local sed_args=()
 
-  generate_from_template "$template" "$target" \
-    "{REPLACE_RPC_USER}" "$user" \
-    "{REPLACE_RPC_PASSWORD}" "$password"
+  sed_args+=(
+    -e "s/{REPLACE_RPC_USER}/$(printf '%s' "$user" | sed_replacement_escape)/g"
+    -e "s/{REPLACE_RPC_PASSWORD}/$(printf '%s' "$password" | sed_replacement_escape)/g"
+  )
+
+  if [ "$keep_prune" -eq 0 ]; then
+    sed_args+=(-e '/^[[:space:]]*prune[[:space:]]*=/d')
+  fi
+
+  mkdir -p "$(dirname "$target")"
+  sed "${sed_args[@]}" "$template" >"$target"
 }
 
 generate_fractal_indexer_chain_config() {

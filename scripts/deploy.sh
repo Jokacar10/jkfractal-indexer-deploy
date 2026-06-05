@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/deploy.sh [--snapshot=<height>] [--force] [--skip-init-db] [--yes]
+  scripts/deploy.sh [--snapshot=<height|latest>] [--download-only] [--force] [--skip-init-db] [--yes]
 
 Snapshot restore environment:
   AWS_ACCESS_KEY_ID       Read-only Cloudflare R2 access key; defaults to bundled read-only key
@@ -18,9 +18,15 @@ Snapshot restore environment:
 Without --snapshot, the script initializes configs and starts services without
 restoring Kopia snapshot data.
 
+Use --snapshot=latest to restore the highest height that has all required
+snapshot datasets.
+
 Options:
   --force                  Skip runtime data directory existence checks. With
                            --snapshot, restore snapshots with --delete-extra.
+  --download-only          Restore snapshot datasets and exit without
+                           initializing configs or starting services. Requires
+                           --snapshot=<height|latest>.
   --skip-init-db           Skip fractal-indexer DB initialization.
   --yes                    Automatically confirm non-snapshot deployment warnings.
 
@@ -40,6 +46,7 @@ snapshot_height=""
 force=0
 skip_init_db=0
 assume_yes=0
+download_only=0
 original_args=("$@")
 
 while [ "$#" -gt 0 ]; do
@@ -49,6 +56,9 @@ while [ "$#" -gt 0 ]; do
       ;;
     --force)
       force=1
+      ;;
+    --download-only)
+      download_only=1
       ;;
     --skip-init-db)
       skip_init_db=1
@@ -68,12 +78,18 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ -n "$snapshot_height" ] && ! is_numeric "$snapshot_height"; then
-  usage_error "snapshot height must be numeric"
+  if [ "$snapshot_height" != "latest" ]; then
+    usage_error "snapshot height must be numeric or latest"
+  fi
 fi
 
 use_snapshot=0
 if [ -n "$snapshot_height" ]; then
   use_snapshot=1
+fi
+
+if [ "$download_only" -eq 1 ] && [ "$use_snapshot" -eq 0 ]; then
+  usage_error "--download-only requires --snapshot=<height|latest>"
 fi
 
 if [ "${EUID:-$(id -u)}" -ne 0 ]; then
@@ -86,15 +102,8 @@ check_env_args=()
 if [ "$assume_yes" -eq 1 ]; then
   check_env_args+=(--yes)
 fi
-if [ "$use_snapshot" -eq 1 ]; then
-  check_env_args+=(--snapshot="$snapshot_height")
-fi
-
 log "Installing missing deployment dependencies"
 bash "${SCRIPT_DIR}/install-deps.sh"
-
-log "Running deployment environment checks"
-bash "${SCRIPT_DIR}/check-env.sh" "${check_env_args[@]}"
 
 load_default_readonly_r2_credentials
 
@@ -109,7 +118,22 @@ if [ "$use_snapshot" -eq 1 ]; then
   require_env AWS_ACCESS_KEY_ID
   require_env AWS_SECRET_ACCESS_KEY
   require_env KOPIA_REPOSITORY_PASSWORD
+
+  if [ "$snapshot_height" = "latest" ]; then
+    log "Connecting Kopia repository as read-only"
+    kopia_connect_s3 readonly
+    log "Resolving latest complete snapshot height"
+    snapshot_height="$(kopia_latest_complete_snapshot_height)"
+    log "Latest complete snapshot height: ${snapshot_height}"
+  fi
 fi
+
+if [ "$use_snapshot" -eq 1 ]; then
+  check_env_args+=(--snapshot="$snapshot_height")
+fi
+
+log "Running deployment environment checks"
+bash "${SCRIPT_DIR}/check-env.sh" "${check_env_args[@]}"
 
 ensure_clickhouse_data_small_enough_for_db_init() {
   local path="${REPO_ROOT}/fractal-indexer/data/clickhouse"
@@ -168,10 +192,10 @@ if [ -f "$fractald_config" ]; then
 else
   rpc_user="fip101"
   rpc_password="$(generate_password)"
-
-  log "Generating fractald config"
-  generate_fractald_config "$rpc_user" "$rpc_password"
 fi
+
+log "Generating fractald config"
+generate_fractald_config "$rpc_user" "$rpc_password" "$use_snapshot"
 
 restore_dataset() {
   local dataset="$1"
@@ -193,6 +217,8 @@ fractald_info_file=""
 fractald_rpc_error_file=""
 fractal_indexer_initialized=0
 fractal_indexer_storage_started=0
+stake_indexer_initialized=0
+stake_indexer_storage_started=0
 restore_summary_file="$(mktemp)"
 fractald_info_file="$(mktemp)"
 fractald_rpc_error_file="$(mktemp)"
@@ -229,6 +255,31 @@ start_fractal_indexer_storage() {
   wait_compose_service_ready "${REPO_ROOT}/fractal-indexer" pika 120 10
   wait_compose_service_ready "${REPO_ROOT}/fractal-indexer" pika-brc20 120 10
   fractal_indexer_storage_started=1
+}
+
+initialize_stake_indexer() {
+  if [ "$stake_indexer_initialized" -eq 1 ]; then
+    return
+  fi
+
+  log "Initializing stake-indexer"
+  (
+    cd "${REPO_ROOT}/stake-indexer"
+    bash ./scripts/init.sh
+  )
+  stake_indexer_initialized=1
+}
+
+start_stake_indexer_storage() {
+  if [ "$stake_indexer_storage_started" -eq 1 ]; then
+    return
+  fi
+
+  log "Starting stake-indexer storage services"
+  run_compose "${REPO_ROOT}/stake-indexer" up -d postgres redis
+  wait_compose_service_ready "${REPO_ROOT}/stake-indexer" postgres 120 10
+  wait_compose_service_ready "${REPO_ROOT}/stake-indexer" redis 120 10
+  stake_indexer_storage_started=1
 }
 
 wait_compose_service_ready() {
@@ -273,8 +324,23 @@ if [ "$use_snapshot" -eq 1 ]; then
   restore_dataset fractald-chainstate "${REPO_ROOT}/fractald/data/chainstate"
   restore_dataset fractal-indexer-data "${REPO_ROOT}/fractal-indexer/data"
 
+  if [ "$download_only" -eq 1 ]; then
+    cat <<EOF
+
+Restored snapshots:
+$(cat "$restore_summary_file")
+
+Selected snapshot height: ${snapshot_height}
+
+Download-only mode: skipped config initialization and service startup.
+EOF
+    exit 0
+  fi
+
   initialize_fractal_indexer
   start_fractal_indexer_storage
+  initialize_stake_indexer
+  start_stake_indexer_storage
 fi
 
 log "Initializing fractald directory ownership"
@@ -320,15 +386,12 @@ start_fractal_indexer_storage
 log "Starting fractal-indexer indexer and API"
 run_compose "${REPO_ROOT}/fractal-indexer" up -d indexer api
 
-log "Initializing stake-indexer"
-(
-  cd "${REPO_ROOT}/stake-indexer"
-  bash ./scripts/init.sh
-)
+initialize_stake_indexer
 generate_stake_indexer_chain_config "$rpc_user" "$rpc_password"
+start_stake_indexer_storage
 
 log "Starting stake-indexer"
-run_compose "${REPO_ROOT}/stake-indexer" up -d
+run_compose "${REPO_ROOT}/stake-indexer" up -d indexer
 
 log "Initializing proof-publisher config"
 (

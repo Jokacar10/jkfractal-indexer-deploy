@@ -68,7 +68,6 @@ address, indexer name, and UniSat Open API key. Then initialize and start the
 publisher:
 
 ```bash
-docker network create fractal-indexer-fip101-net
 bash ./scripts/init.sh
 docker compose up -d
 ```

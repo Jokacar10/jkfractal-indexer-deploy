@@ -37,6 +37,12 @@ if ! is_numeric "$snapshot_height"; then
   usage_error "snapshot height must be numeric"
 fi
 
+if [ "${EUID:-$(id -u)}" -ne 0 ]; then
+  require_command sudo
+  log "Re-running script as root via sudo"
+  exec sudo -E bash "$0" "${@}"
+fi
+
 require_command kopia
 require_command jq
 require_env AWS_ACCESS_KEY_ID
@@ -48,6 +54,7 @@ datasets=$(
 fractald-blocks|${UPLOAD_BASE_DIR}/fractald/data/blocks
 fractald-chainstate|${UPLOAD_BASE_DIR}/fractald/data/chainstate
 fractal-indexer-data|${UPLOAD_BASE_DIR}/fractal-indexer/data
+stake-indexer-data|${UPLOAD_BASE_DIR}/stake-indexer/data
 EOF
 )
 
@@ -67,7 +74,7 @@ if [ "$missing" -ne 0 ] && [ "${ALLOW_PARTIAL_UPLOAD:-}" != "1" ]; then
 fi
 
 if command -v docker >/dev/null 2>&1; then
-  if docker ps --format '{{.Names}}' | grep -E 'fractald|fractal-indexer|clickhouse|pika' >/dev/null 2>&1; then
+  if docker ps --format '{{.Names}}' | grep -E 'fractald|fractal-indexer|clickhouse|pika|stake-indexer|postgres|redis' >/dev/null 2>&1; then
     warn "related containers appear to be running; hot snapshots may be inconsistent"
   fi
 fi

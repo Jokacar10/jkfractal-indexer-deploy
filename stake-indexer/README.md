@@ -64,7 +64,6 @@ node. If needed, edit `conf/indexer/config.yaml` so `state_api_base_url` points
 to your Fractal indexer API. Then initialize and start the stack:
 
 ```bash
-docker network create fractal-indexer-fip101-net
 bash ./scripts/init.sh
 docker compose up -d
 ```
@@ -77,7 +76,8 @@ Prepare local directories:
 bash ./scripts/init.sh
 ```
 
-This creates `data/pgdata` and `data/redis`, then applies ownership for PostgreSQL.
+This creates `data/pgdata` and `data/redis`, ensures the shared Docker network
+exists, then applies ownership for PostgreSQL.
 
 ## Start the Stack
 

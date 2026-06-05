@@ -19,6 +19,8 @@ Use `scripts/deploy.sh` for full deployments and service-local Compose files for
 manual work.
 
 - `scripts/deploy.sh --snapshot=1820067`: fresh snapshot deployment.
+- `scripts/deploy.sh --snapshot=latest`: deploy the highest complete snapshot height.
+- `scripts/deploy.sh --snapshot=1820067 --download-only`: restore snapshot data and exit before service startup.
 - `scripts/deploy.sh --snapshot=1820067 --yes`: deploy with automatic warning confirmation.
 - `scripts/check-env.sh --snapshot=1820067`: check dependencies, ports, memory, disk, and data directories.
 - `scripts/install-deps.sh`: install missing deployment dependencies.
