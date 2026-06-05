@@ -58,7 +58,7 @@ start the indexer:
 
 ```bash
 bash ./scripts/init.sh db
-docker-compose up -d
+docker compose up -d
 ```
 
 ## Initialization
@@ -78,13 +78,13 @@ bash ./scripts/init.sh db
 The `db` mode runs:
 
 ```bash
-docker-compose run --rm indexer -full -end 256
+docker compose run --rm indexer -full -end 256
 ```
 
 ## Start the Stack
 
 ```bash
-docker-compose up -d indexer api
+docker compose up -d indexer api
 ```
 
 This also starts the dependent `clickhouse`, `pika`, and `pika-brc20` services through `depends_on`.
@@ -92,8 +92,8 @@ This also starts the dependent `clickhouse`, `pika`, and `pika-brc20` services t
 ## Verify the Deployment
 
 ```bash
-docker-compose ps
-docker-compose logs --tail=100 -f indexer api
+docker compose ps
+docker compose logs --tail=100 -f indexer api
 ```
 
 API endpoint:

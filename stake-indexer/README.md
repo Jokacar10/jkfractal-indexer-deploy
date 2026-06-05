@@ -64,7 +64,7 @@ to your Fractal indexer API. Then initialize and start the stack:
 
 ```bash
 bash ./scripts/init.sh
-docker-compose up -d
+docker compose up -d
 ```
 
 ## Initialization
@@ -80,14 +80,14 @@ This creates `data/pgdata` and `data/redis`, then applies ownership for PostgreS
 ## Start the Stack
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ## Verify the Deployment
 
 ```bash
-docker-compose ps
-docker-compose logs --tail=100 -f indexer postgres redis
+docker compose ps
+docker compose logs --tail=100 -f indexer postgres redis
 ```
 
 Endpoints:

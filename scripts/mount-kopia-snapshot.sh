@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/mount-kopia-snapshots.sh <height> <target-dir>
+  scripts/mount-kopia-snapshot.sh <height> <target-dir>
 
 Mounts snapshot datasets under <target-dir>:
   fractald/blocks
@@ -17,7 +17,7 @@ Mounts snapshot datasets under <target-dir>:
   fractal-indexer/data
 
 Example:
-  scripts/mount-kopia-snapshots.sh 1820067 snapshot/1820067
+  scripts/mount-kopia-snapshot.sh 1820067 snapshot/1820067
 EOF
 }
 
@@ -43,33 +43,19 @@ if [ "${EUID:-$(id -u)}" -ne 0 ]; then
   exec sudo -E bash "$0" "$snapshot_height" "$target_root"
 fi
 
-install_fuse() {
-  if command -v apt-get >/dev/null 2>&1; then
-    log "Installing FUSE with apt-get"
-    apt-get update
-    apt-get install -y fuse3 || apt-get install -y fuse
-    return
-  fi
-
-  if command -v yum >/dev/null 2>&1; then
-    log "Installing FUSE with yum"
-    yum install -y fuse3 || yum install -y fuse
-    return
-  fi
-
-  die "missing FUSE unmount command and neither apt-get nor yum is available"
-}
-
 ensure_fuse_available() {
   if command -v fusermount3 >/dev/null 2>&1 || command -v fusermount >/dev/null 2>&1; then
     return
   fi
 
-  install_fuse
+  cat >&2 <<'EOF'
+FUSE is required to mount Kopia snapshots.
 
-  if ! command -v fusermount3 >/dev/null 2>&1 && ! command -v fusermount >/dev/null 2>&1; then
-    die "FUSE installation completed but fusermount was not found"
-  fi
+Install it manually, then rerun this script:
+  Debian/Ubuntu:              sudo apt-get install fuse3
+  CentOS/RHEL/Amazon Linux:   sudo yum install fuse3
+EOF
+  exit 1
 }
 
 unmount_path() {

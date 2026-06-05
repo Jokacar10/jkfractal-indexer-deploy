@@ -26,16 +26,25 @@ Upstream project repositories:
 
 ## Prerequisites
 
-Install these tools before running the deploy script:
+`scripts/deploy.sh` runs `scripts/install-deps.sh` by default and attempts to
+install the required deployment tools automatically.
+
+The deployment scripts support `apt-get`, `dnf`, and `yum` based systems. For
+manual installation, use these official documents:
 
 - Docker with Docker Compose
 - `jq`, See the official installation guide: [https://jqlang.org/download/](https://jqlang.org/download/)
 - `kopia`, required for snapshot restore. See the official Kopia installation guide: [kopia.io/docs/installation](https://kopia.io/docs/installation/)
+- `rsync`
+
+`scripts/mount-kopia-snapshot.sh` also requires FUSE. It checks for FUSE but
+does not install it automatically.
 
 ## Resource Requirements
 
 - `fractald`: disk `400 GB+`, minimum memory `8 GB`, recommended memory `16 GB`
-- `fractal-indexer`: disk `400 GB+`, minimum memory `64 GB`, recommended memory `128 GB`
+- `fractal-indexer`: disk `400 GB+`, minimum memory `48 GB`, recommended memory `96 GB`
+- Single-host snapshot deployment on the same disk: disk `800 GB+`, minimum memory `64 GB`
 
 ## Quick Start
 
@@ -44,9 +53,8 @@ stop all services first and remove the runtime `data` directories before running
 the script again:
 
 ```bash
-scripts/stop.sh
-
-rm -rf fractald/data fractal-indexer/data stake-indexer/data proof-publisher/data
+scripts/cleanup.sh --stop
+scripts/cleanup.sh --data
 ```
 
 The `--force` option skips existing data directory checks. When used with
@@ -64,6 +72,13 @@ git clone https://github.com/fractal-bitcoin/fractal-indexer-deploy
 cd fractal-indexer-deploy
 
 scripts/deploy.sh --snapshot=1820067
+```
+
+For non-interactive non-snapshot deployment, add `--yes` to confirm deployment
+warnings automatically:
+
+```bash
+scripts/deploy.sh --snapshot=1820067 --yes
 ```
 
 The deploy script starts `fractald`, `fractal-indexer`, and `stake-indexer`, and
@@ -119,6 +134,24 @@ Common datasets:
 - `fractald-chainstate` to `fractald/data/chainstate`
 - `fractal-indexer-data` to `fractal-indexer/data`
 
+## Mount Snapshot Datasets
+
+Use `scripts/mount-kopia-snapshot.sh` to mount snapshot datasets under a target
+directory:
+
+```bash
+scripts/mount-kopia-snapshot.sh 1820067 snapshot/1820067
+```
+
+The mounted directory contains:
+
+- `fractald/blocks`
+- `fractald/chainstate`
+- `fractal-indexer/data`
+
+This script requires FUSE. If FUSE is missing, the script prints the manual
+installation command and exits.
+
 ## Deploy Without Snapshots
 
 You can run the deploy script without `--snapshot`:
@@ -137,6 +170,54 @@ node may cause indexing failures.
 
 A full node plus full index data requires more than `3 TB` of disk space. For a
 full index rebuild from genesis, `128 GB+` memory is recommended.
+
+When running without `--snapshot`, the script prints these requirements and asks
+for confirmation before continuing. Add `--yes` only when you are intentionally
+running in a non-interactive environment.
+
+## Environment Checks
+
+`scripts/check-env.sh` is run by `scripts/deploy.sh` before deployment. It
+checks:
+
+- operating system and package manager
+- sudo/root availability
+- Docker, Docker Compose, `jq`, `kopia`, `rsync`
+- memory and available disk
+- runtime data directory status
+- service port availability
+
+Snapshot deployment enforces the combined single-host requirement:
+`800 GiB+` available disk and `64 GiB+` memory.
+Non-snapshot deployment prints the heavier full-sync requirements and requires
+confirmation.
+
+## Dependency Installation
+
+`scripts/install-deps.sh` installs missing deployment dependencies:
+
+```bash
+scripts/install-deps.sh
+```
+
+The script supports `apt-get`, `dnf`, and `yum`. It configures official Docker
+and Kopia package repositories when those tools are missing.
+
+## Cleanup
+
+Use `scripts/cleanup.sh` to stop services or remove generated runtime state:
+
+```bash
+scripts/cleanup.sh --stop
+scripts/cleanup.sh --data
+scripts/cleanup.sh --all
+```
+
+- `--stop` stops all services without deleting data.
+- `--data` stops all services and deletes runtime `data/` directories. You must
+  type `data` to confirm.
+- `--all` stops all services and deletes runtime data, logs, generated configs,
+  and the local Kopia cache. You must type `all` to confirm.
 
 ## Optional Proof Publisher
 
@@ -157,7 +238,7 @@ Then start it:
 
 ```bash
 bash ./scripts/init.sh
-docker-compose up -d
+docker compose up -d
 cd ..
 ```
 
@@ -166,8 +247,8 @@ cd ..
 Use these commands after startup:
 
 ```bash
-docker-compose ps
-docker-compose logs --tail=100 -f
+docker compose ps
+docker compose logs --tail=100 -f
 ```
 
 Check:

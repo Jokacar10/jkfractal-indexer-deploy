@@ -69,17 +69,12 @@ is_numeric() {
 }
 
 compose_cmd_array() {
-  if command -v docker-compose >/dev/null 2>&1; then
-    COMPOSE_CMD=(docker-compose)
-    return
-  fi
-
   if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
     COMPOSE_CMD=(docker compose)
     return
   fi
 
-  die "missing docker compose command"
+  die "missing docker compose plugin"
 }
 
 compose_cmd() {
@@ -125,7 +120,7 @@ check_ports_free() {
 
   for port in "$@"; do
     if port_in_use "$port"; then
-      die "port ${port} is already in use; If you need to redeploy, run scripts/stop.sh first"
+      die "port ${port} is already in use; services may already be running. If you need to redeploy, run scripts/cleanup.sh --stop first"
     fi
   done
 }

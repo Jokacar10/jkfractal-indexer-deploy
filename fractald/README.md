@@ -56,7 +56,7 @@ start the stack:
 
 ```bash
 bash ./scripts/init.sh
-docker-compose up -d
+docker compose up -d
 ```
 
 ## Initialization
@@ -70,15 +70,15 @@ bash ./scripts/init.sh
 ## Start the Stack
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ## Verify the Deployment
 
 ```bash
-docker-compose ps
-docker-compose logs --tail=100 -f fractald
-docker-compose exec fractald bitcoin-cli --conf=/conf/bitcoin.conf getblockchaininfo
+docker compose ps
+docker compose logs --tail=100 -f fractald
+docker compose exec fractald bitcoin-cli --conf=/conf/bitcoin.conf getblockchaininfo
 ```
 
 RPC is available on `http://localhost:10332` with the credentials configured in

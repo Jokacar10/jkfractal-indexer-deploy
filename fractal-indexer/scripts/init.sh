@@ -12,8 +12,14 @@ sudo chown -R 1000:1000 data logs
 sudo chown -R 101:101 data/clickhouse logs/clickhouse
 )
 
-test "$1" == "db" && (
-  echo ">>> Init Database"
-  set -x; docker-compose run --rm indexer -full -end 256
-) || true
+if [ "${1:-}" = "db" ]; then
+  if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
+    echo "ERROR: missing docker compose command" >&2
+    exit 1
+  fi
 
+  echo ">>> Init Database"
+  set -x
+  docker compose run --rm indexer -full -end 256
+  set +x
+fi

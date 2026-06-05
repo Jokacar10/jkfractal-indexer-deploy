@@ -71,21 +71,21 @@ publisher:
 
 ```bash
 bash ./scripts/init.sh
-docker-compose up -d
+docker compose up -d
 ```
 
 ## Start
 
 ```bash
 bash ./scripts/init.sh
-docker-compose up -d
+docker compose up -d
 ```
 
 ## Verify
 
 ```bash
-docker-compose ps
-docker-compose logs --tail=100 -f proof-publisher
+docker compose ps
+docker compose logs --tail=100 -f proof-publisher
 curl -s http://localhost:8080/healthz
 curl -s http://localhost:8080/status
 ```

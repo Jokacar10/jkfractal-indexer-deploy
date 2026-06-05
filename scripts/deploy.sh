@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/deploy.sh [--snapshot=<height>] [--force] [--skip-init-db]
+  scripts/deploy.sh [--snapshot=<height>] [--force] [--skip-init-db] [--yes]
 
 Snapshot restore environment:
   AWS_ACCESS_KEY_ID       Read-only Cloudflare R2 access key; defaults to bundled read-only key
@@ -22,6 +22,7 @@ Options:
   --force                  Skip runtime data directory existence checks. With
                            --snapshot, restore snapshots with --delete-extra.
   --skip-init-db           Skip fractal-indexer DB initialization.
+  --yes                    Automatically confirm non-snapshot deployment warnings.
 
 Optional proof-publisher environment. If all are provided, proof-publisher
 will be started; otherwise config.json is generated but the service is not
@@ -38,6 +39,7 @@ EOF
 snapshot_height=""
 force=0
 skip_init_db=0
+assume_yes=0
 original_args=("$@")
 
 while [ "$#" -gt 0 ]; do
@@ -50,6 +52,9 @@ while [ "$#" -gt 0 ]; do
       ;;
     --skip-init-db)
       skip_init_db=1
+      ;;
+    --yes)
+      assume_yes=1
       ;;
     -h|--help)
       usage
@@ -76,6 +81,20 @@ if [ "${EUID:-$(id -u)}" -ne 0 ]; then
   log "Re-running deploy script as root via sudo"
   exec sudo -E bash "$0" "${original_args[@]}"
 fi
+
+check_env_args=()
+if [ "$assume_yes" -eq 1 ]; then
+  check_env_args+=(--yes)
+fi
+if [ "$use_snapshot" -eq 1 ]; then
+  check_env_args+=(--snapshot="$snapshot_height")
+fi
+
+log "Installing missing deployment dependencies"
+bash "${SCRIPT_DIR}/install-deps.sh"
+
+log "Running deployment environment checks"
+bash "${SCRIPT_DIR}/check-env.sh" "${check_env_args[@]}"
 
 load_default_readonly_r2_credentials
 
