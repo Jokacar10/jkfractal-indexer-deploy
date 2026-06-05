@@ -237,7 +237,11 @@ kopia_snapshot_object_id() {
   tags_display="$(IFS=,; printf '%s' "$*")"
   object_id="$(kopia_snapshot_json_by_tags "$@" \
     | jq -er '
-      if type == "array" then flatten else [.] end
+      # Normalize the result before filtering.
+      if type == "array" then . else [.] end
+      # A restorable snapshot must have a root object. When multiple snapshots
+      # match the same tag set, choose the newest snapshot record and restore
+      # its root object.
       | map(select(.rootEntry.obj != null))
       | sort_by(.startTime // .endTime // "")
       | last
@@ -257,9 +261,14 @@ kopia_latest_complete_snapshot_height() {
 
   height="$(kopia_snapshot_json_by_tags "network:fractal" "role:snapshot" \
     | jq -er --arg required "$required_datasets_csv" '
+      # Kopia JSON is normally an array. Keep arrays as-is and wrap a single
+      # object only if Kopia ever returns one.
       def entries:
-        if type == "array" then flatten else [.] end;
+        if type == "array" then . else [.] end;
 
+      # Tags have appeared in both object form, such as
+      # {"tag:height":"1827202"}, and array/string form, such as
+      # ["height:1827202"]. Support both forms to keep old snapshots readable.
       def tag_value($key):
         if (.tags // null) == null then
           empty
@@ -282,19 +291,26 @@ kopia_latest_complete_snapshot_height() {
 
       ($required | split(",")) as $required_datasets
       | entries
+      # Keep only the fields needed to decide whether a height is usable.
       | map({
           height: (tag_value("height") | tostring),
           dataset: (tag_value("dataset") | tostring),
           object: (.rootEntry.obj // empty),
           incomplete: (.incomplete // .rootEntry.incomplete // .rootEntry.summ.incomplete // "")
         })
+      # A candidate dataset must have a numeric height, a dataset tag, a root
+      # object, and must not be marked incomplete.
       | map(select(.object != "" and .incomplete == "" and (.height | test("^[0-9]+$")) and (.dataset != "")))
+      # Group all datasets by height, then keep heights that include every
+      # required dataset. Duplicate records for a dataset do not matter here;
+      # uniqueness is checked by dataset name only.
       | group_by(.height)
       | map({
           height: .[0].height,
           datasets: (map(.dataset) | unique)
         })
       | map(select(($required_datasets - .datasets) | length == 0))
+      # Pick the highest complete height.
       | sort_by(.height | tonumber)
       | last
       | .height // empty

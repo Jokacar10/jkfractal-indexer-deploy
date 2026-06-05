@@ -6,6 +6,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/lib.sh
 . "${SCRIPT_DIR}/lib.sh"
 
+FRACTAL_INDEXER_INIT_END_HEIGHT=256
+FRACTALD_INIT_HEIGHT_CHECK_ATTEMPTS=720
+FRACTALD_INIT_HEIGHT_CHECK_DELAY_SECONDS=10
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -290,6 +294,67 @@ wait_compose_service_ready() {
   done
 }
 
+fetch_fractald_info() {
+  run_compose "${REPO_ROOT}/fractald" exec -T fractald bitcoin-cli --conf=/conf/bitcoin.conf getblockchaininfo >"$fractald_info_file" 2>"${fractald_rpc_error_file:-/dev/null}"
+}
+
+fractald_blocks_from_info() {
+  jq -r '(.blocks // 0) | tonumber' "$fractald_info_file"
+}
+
+wait_for_fractald_rpc() {
+  local attempt
+
+  log "Waiting for fractald RPC"
+  for attempt in $(seq 1 120); do
+    if fetch_fractald_info; then
+      log "fractald RPC response:"
+      sed 's/^/  /' "$fractald_info_file"
+      if [ -n "${fractald_rpc_error_file:-}" ] && [ -s "$fractald_rpc_error_file" ]; then
+        warn "fractald RPC stderr:"
+        sed 's/^/  /' "$fractald_rpc_error_file"
+      fi
+      return
+    fi
+    sleep 5
+  done
+
+  die "fractald RPC did not become available"
+}
+
+wait_for_fractald_height() {
+  local target_height="$1"
+  local reason="$2"
+  local attempt height last_height=""
+
+  log "Waiting for fractald height >= ${target_height} before ${reason}"
+  for attempt in $(seq 1 "$FRACTALD_INIT_HEIGHT_CHECK_ATTEMPTS"); do
+    if fetch_fractald_info; then
+      height="$(fractald_blocks_from_info)"
+      if [ "$height" -ge "$target_height" ]; then
+        log "fractald height ${height} reached target ${target_height}"
+        return
+      fi
+
+      if [ "$height" != "$last_height" ] || [ $((attempt % 6)) -eq 1 ]; then
+        log "fractald height ${height}/${target_height}; waiting for node sync"
+        last_height="$height"
+      fi
+    else
+      warn "fractald RPC unavailable while waiting for height ${target_height}"
+      if [ -n "${fractald_rpc_error_file:-}" ] && [ -s "$fractald_rpc_error_file" ]; then
+        sed 's/^/  /' "$fractald_rpc_error_file" >&2
+      fi
+    fi
+
+    if [ "$attempt" -lt "$FRACTALD_INIT_HEIGHT_CHECK_ATTEMPTS" ]; then
+      sleep "$FRACTALD_INIT_HEIGHT_CHECK_DELAY_SECONDS"
+    fi
+  done
+
+  die "fractald height did not reach ${target_height}; cannot safely run fractal-indexer init.sh db"
+}
+
 if [ "$use_snapshot" -eq 1 ]; then
   log "Connecting Kopia repository as read-only"
   kopia_connect_s3 readonly
@@ -353,29 +418,17 @@ log "Initializing fractald directory ownership"
 log "Starting fractald"
 run_compose "${REPO_ROOT}/fractald" up -d
 
-log "Waiting for fractald RPC; this verifies restored blocks and chainstate can be opened"
-for attempt in $(seq 1 120); do
-  if run_compose "${REPO_ROOT}/fractald" exec -T fractald bitcoin-cli --conf=/conf/bitcoin.conf getblockchaininfo >"$fractald_info_file" 2>"${fractald_rpc_error_file:-/dev/null}"; then
-    log "fractald RPC response:"
-    sed 's/^/  /' "$fractald_info_file"
-    if [ -n "${fractald_rpc_error_file:-}" ] && [ -s "$fractald_rpc_error_file" ]; then
-      warn "fractald RPC stderr:"
-      sed 's/^/  /' "$fractald_rpc_error_file"
-    fi
-    break
-  fi
-  sleep 5
-done
+wait_for_fractald_rpc
 
-if [ ! -s "$fractald_info_file" ]; then
-  die "fractald RPC did not become available"
-fi
-
-node_height="$(jq -r '.blocks // 0' "$fractald_info_file")"
+node_height="$(fractald_blocks_from_info)"
 log "fractald height: ${node_height}"
 
 if [ "$use_snapshot" -eq 1 ] && [ "$node_height" -lt "$snapshot_height" ]; then
   die "fractald height ${node_height} is below requested snapshot height ${snapshot_height}"
+fi
+
+if [ "$use_snapshot" -eq 0 ] && [ "$skip_init_db" -eq 0 ]; then
+  wait_for_fractald_height "$FRACTAL_INDEXER_INIT_END_HEIGHT" "running fractal-indexer init.sh db"
 fi
 
 log "Generating fractal-indexer config"
