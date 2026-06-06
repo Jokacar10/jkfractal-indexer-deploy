@@ -9,6 +9,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FRACTAL_INDEXER_INIT_END_HEIGHT=256
 FRACTALD_INIT_HEIGHT_CHECK_ATTEMPTS=720
 FRACTALD_INIT_HEIGHT_CHECK_DELAY_SECONDS=10
+FRACTAL_INDEXER_API_CHECK_ATTEMPTS=120
+FRACTAL_INDEXER_API_CHECK_DELAY_SECONDS=5
 
 usage() {
   cat <<'EOF'
@@ -113,6 +115,7 @@ load_default_readonly_r2_credentials
 
 require_command docker
 require_command jq
+require_command curl
 compose_cmd >/dev/null
 ensure_fractal_network
 check_port_publication_security
@@ -355,6 +358,37 @@ wait_for_fractald_height() {
   die "fractald height did not reach ${target_height}; cannot safely run fractal-indexer init.sh db"
 }
 
+wait_for_fractal_indexer_api() {
+  local url="http://127.0.0.1:8000/brc20/bestheight"
+  local attempt response="" height
+
+  log "Waiting for fractal-indexer API bestheight"
+  for attempt in $(seq 1 "$FRACTAL_INDEXER_API_CHECK_ATTEMPTS"); do
+    response="$(curl -fsS --max-time 5 "$url" 2>/dev/null || true)"
+    if printf '%s' "$response" | jq -e '.data.height != null' >/dev/null 2>&1; then
+      height="$(printf '%s' "$response" | jq -r '.data.height')"
+      log "fractal-indexer API bestheight is available at height ${height}"
+      return
+    fi
+
+    if [ $((attempt % 12)) -eq 1 ]; then
+      log "fractal-indexer API bestheight unavailable; waiting"
+    fi
+
+    if [ "$attempt" -lt "$FRACTAL_INDEXER_API_CHECK_ATTEMPTS" ]; then
+      sleep "$FRACTAL_INDEXER_API_CHECK_DELAY_SECONDS"
+    fi
+  done
+
+  warn "Last fractal-indexer API bestheight response:"
+  if [ -n "$response" ]; then
+    printf '%s\n' "$response" | sed 's/^/  /' >&2
+  else
+    warn "  empty response"
+  fi
+  die "fractal-indexer API bestheight did not become available"
+}
+
 if [ "$use_snapshot" -eq 1 ]; then
   log "Connecting Kopia repository as read-only"
   kopia_connect_s3 readonly
@@ -439,6 +473,7 @@ start_fractal_indexer_storage
 
 log "Starting fractal-indexer indexer and API"
 run_compose "${REPO_ROOT}/fractal-indexer" up -d indexer api
+wait_for_fractal_indexer_api
 
 initialize_stake_indexer
 generate_stake_indexer_chain_config "$rpc_user" "$rpc_password"
