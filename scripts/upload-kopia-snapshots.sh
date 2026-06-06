@@ -23,6 +23,7 @@ Optional environment:
   KOPIA_USERNAME               Default: fractalbitcoin
   KOPIA_HOSTNAME               Default: fractalbitcoin-fip101
   UPLOAD_BASE_DIR              Default: /opt/fractal-indexer-deploy
+  SNAPSHOT_SCHEMA_VERSION      Default: v1
   ALLOW_PARTIAL_UPLOAD         Set to 1 to skip missing datasets
 EOF
 }
@@ -98,18 +99,19 @@ while IFS='|' read -r dataset path; do
     --tags="network:fractal"
     --tags="role:snapshot"
     --tags="dataset:${dataset}"
+    --tags="dbschema:${SNAPSHOT_SCHEMA_VERSION}"
   )
 
   log "Uploading ${dataset} from ${path}"
   kopia snapshot create "$path" "${tag_args[@]}"
 
-  snapshot_id="$(kopia_snapshot_object_id "height:${snapshot_height}" "network:fractal" "role:snapshot" "dataset:${dataset}")"
+  snapshot_id="$(kopia_snapshot_object_id "height:${snapshot_height}" "network:fractal" "role:snapshot" "dataset:${dataset}" "dbschema:${SNAPSHOT_SCHEMA_VERSION}")"
 
-  printf '%s\t%s\t%s\t%s\n' "$snapshot_height" "$dataset" "$snapshot_id" "$path" >>"$summary_file"
+  printf '%s\t%s\t%s\t%s\t%s\n' "$snapshot_height" "$SNAPSHOT_SCHEMA_VERSION" "$dataset" "$snapshot_id" "$path" >>"$summary_file"
 done <<EOF
 $datasets
 EOF
 
 log "Publish summary"
-printf 'height\tdataset\tsnapshot_object\tpath\n'
+printf 'height\tdbschema\tdataset\tsnapshot_object\tpath\n'
 cat "$summary_file"

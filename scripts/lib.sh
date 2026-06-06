@@ -4,6 +4,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+: "${SNAPSHOT_SCHEMA_VERSION:=v1}"
 : "${KOPIA_R2_BUCKET:=kopia-repo}"
 : "${KOPIA_R2_ENDPOINT:=eccc9c966ad74b3b2b15c2961767d059.r2.cloudflarestorage.com}"
 : "${KOPIA_REPOSITORY_PASSWORD:=fractalbitcoin}"
@@ -255,12 +256,33 @@ kopia_snapshot_object_id() {
   printf '%s\n' "$object_id"
 }
 
+kopia_snapshot_source_path() {
+  local source_path
+  local tags_display
+
+  tags_display="$(IFS=,; printf '%s' "$*")"
+  source_path="$(kopia_snapshot_json_by_tags "$@" \
+    | jq -er '
+      if type == "array" then . else [.] end
+      | map(select(.rootEntry.obj != null and .source.path != null))
+      | sort_by(.startTime // .endTime // "")
+      | last
+      | .source.path // empty
+    ' || true)"
+
+  if [ -z "$source_path" ]; then
+    die "snapshot source path not found for tags: ${tags_display}"
+  fi
+
+  printf '%s\n' "$source_path"
+}
+
 kopia_latest_complete_snapshot_height() {
   local required_datasets_csv="fractald-blocks,fractald-chainstate,fractal-indexer-data,stake-indexer-data"
   local height
 
-  height="$(kopia_snapshot_json_by_tags "network:fractal" "role:snapshot" \
-    | jq -er --arg required "$required_datasets_csv" '
+  height="$(kopia_snapshot_json_by_tags "network:fractal" "role:snapshot" "dbschema:${SNAPSHOT_SCHEMA_VERSION}" \
+    | jq -er --arg required "$required_datasets_csv" --arg schema "$SNAPSHOT_SCHEMA_VERSION" '
       # Kopia JSON is normally an array. Keep arrays as-is and wrap a single
       # object only if Kopia ever returns one.
       def entries:
@@ -295,12 +317,13 @@ kopia_latest_complete_snapshot_height() {
       | map({
           height: (tag_value("height") | tostring),
           dataset: (tag_value("dataset") | tostring),
+          schema: (tag_value("dbschema") | tostring),
           object: (.rootEntry.obj // empty),
           incomplete: (.incomplete // .rootEntry.incomplete // .rootEntry.summ.incomplete // "")
         })
       # A candidate dataset must have a numeric height, a dataset tag, a root
-      # object, and must not be marked incomplete.
-      | map(select(.object != "" and .incomplete == "" and (.height | test("^[0-9]+$")) and (.dataset != "")))
+      # object, the current DB schema tag, and must not be marked incomplete.
+      | map(select(.object != "" and .incomplete == "" and (.height | test("^[0-9]+$")) and (.dataset != "") and .schema == $schema))
       # Group all datasets by height, then keep heights that include every
       # required dataset. Duplicate records for a dataset do not matter here;
       # uniqueness is checked by dataset name only.
@@ -317,7 +340,7 @@ kopia_latest_complete_snapshot_height() {
     ' || true)"
 
   if [ -z "$height" ] || [ "$height" = "null" ]; then
-    die "no complete snapshot height found for required datasets: ${required_datasets_csv}"
+    die "no complete snapshot height found for dbschema:${SNAPSHOT_SCHEMA_VERSION} and required datasets: ${required_datasets_csv}"
   fi
 
   printf '%s\n' "$height"
@@ -335,6 +358,7 @@ kopia_restore_snapshot_dataset() {
     "role:snapshot"
     "dataset:${dataset}"
     "height:${snapshot_height}"
+    "dbschema:${SNAPSHOT_SCHEMA_VERSION}"
   )
 
   tags_display="$(IFS=,; printf '%s' "${tags[*]}")"

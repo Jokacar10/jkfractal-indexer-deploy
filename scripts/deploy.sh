@@ -142,7 +142,7 @@ fi
 log "Running deployment environment checks"
 bash "${SCRIPT_DIR}/check-env.sh" "${check_env_args[@]}"
 
-ensure_clickhouse_data_small_enough_for_db_init() {
+ensure_clickhouse_data_empty_for_non_snapshot_init() {
   local path="${REPO_ROOT}/fractal-indexer/data/clickhouse"
   local max_size_mb=1024
   local size_mb=0
@@ -152,7 +152,7 @@ ensure_clickhouse_data_small_enough_for_db_init() {
   fi
 
   if [ "$size_mb" -gt "$max_size_mb" ]; then
-    die "${path} is ${size_mb}M, greater than ${max_size_mb}M; refusing to run fractal-indexer init.sh db. If the DB is already initialized, rerun with --skip-init-db"
+    die "${path} is ${size_mb}M, greater than ${max_size_mb}M; non-snapshot deployment must start with an empty fractal-indexer db. Stop services and remove runtime data before redeploying: scripts/cleanup.sh --data"
   fi
 }
 
@@ -176,7 +176,7 @@ else
 fi
 
 if [ "$use_snapshot" -eq 0 ] && [ "$skip_init_db" -eq 0 ]; then
-  ensure_clickhouse_data_small_enough_for_db_init
+  ensure_clickhouse_data_empty_for_non_snapshot_init
 fi
 
 restore_dataset() {

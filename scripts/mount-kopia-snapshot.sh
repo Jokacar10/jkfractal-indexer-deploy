@@ -109,7 +109,8 @@ snapshot_object_id() {
     "network:fractal" \
     "role:snapshot" \
     "dataset:${dataset}" \
-    "height:${snapshot_height}"
+    "height:${snapshot_height}" \
+    "dbschema:${SNAPSHOT_SCHEMA_VERSION}"
 }
 
 mount_dataset() {

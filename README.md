@@ -45,9 +45,9 @@ FUSE and prints manual installation instructions when it is missing.
 
 ## Resource Requirements
 
+- Single-host snapshot deployment on the same disk: disk `800 GB+`, minimum memory `64 GB`
 - `fractald`: disk `400 GB+`, minimum memory `8 GB`, recommended memory `16 GB`
 - `fractal-indexer`: disk `400 GB+`, minimum memory `48 GB`, recommended memory `96 GB`
-- Single-host snapshot deployment on the same disk: disk `800 GB+`, minimum memory `64 GB`
 
 ## Run Quickly with an AI Agent
 
@@ -61,41 +61,25 @@ scripts/deploy.sh --snapshot=latest.
 
 ## Quick Start
 
-`scripts/deploy.sh` only supports fresh deployments by default. To redeploy,
-stop all services first and remove the runtime `data` directories before running
-the script again:
-
-```bash
-scripts/cleanup.sh --stop
-scripts/cleanup.sh --data
-```
-
-The `--force` option skips existing data directory checks. When used with
-`--snapshot`, snapshot restore also enables Kopia `--delete-extra`, so files in
-the target data directories that are not present in the selected snapshot are
-deleted.
-
-The recommended quick start deploys from Kopia snapshots. `--snapshot=latest`
-selects the highest complete snapshot height and avoids syncing `fractald` and
-rebuilding index data from genesis.
+Deploy from the latest snapshot:
 
 ```bash
 git clone https://github.com/fractal-bitcoin/fractal-indexer-deploy
 cd fractal-indexer-deploy
-
 scripts/deploy.sh --snapshot=latest
 ```
 
-To restore snapshot data only and skip config initialization and service
-startup:
+To redeploy from a clean state, stop services and remove runtime data first:
+
+```bash
+scripts/cleanup.sh --data
+```
+
+To download snapshot data only and skip service initialization/startup:
 
 ```bash
 scripts/deploy.sh --snapshot=latest --download-only
 ```
-
-The deploy script starts `fractald`, `fractal-indexer`, and `stake-indexer`, and
-generates `proof-publisher/config.json`. It starts `proof-publisher` only when
-all signing and broadcast environment variables are provided.
 
 ## Manual Service Deployment
 
@@ -163,7 +147,7 @@ numeric height, dataset name, and target directory:
 
 ```bash
 scripts/restore-kopia-snapshot.sh \
-  --height=1820067 \
+  --height=1827409 \
   --dataset=fractald-blocks \
   --target=fractald/data/blocks
 ```
@@ -178,24 +162,6 @@ Common datasets:
 - `fractal-indexer-data` to `fractal-indexer/data`
 - `stake-indexer-data` to `stake-indexer/data`
 
-## Mount Snapshot Datasets
-
-Use `scripts/mount-kopia-snapshot.sh` to mount all snapshot datasets under a
-target directory:
-
-```bash
-scripts/mount-kopia-snapshot.sh 1820067 snapshot/1820067
-```
-
-The mounted directory contains:
-
-- `fractald/blocks`
-- `fractald/chainstate`
-- `fractal-indexer/data`
-- `stake-indexer/data`
-
-This script requires FUSE. If FUSE is missing, the script prints manual
-installation instructions and exits.
 
 ## Deploy Without Snapshots
 
@@ -304,6 +270,12 @@ Check:
 - `http://localhost:8080/healthz` for the optional proof publisher
 
 ## Changelog
+
+### 20260606
+
+1. Added one-command snapshot restore and deployment with `scripts/deploy.sh --snapshot=latest`.
+2. Updated the latest snapshot height to `1827409`.
+3. Improved network security by binding API endpoints to local access by default.
 
 ### 20260602
 

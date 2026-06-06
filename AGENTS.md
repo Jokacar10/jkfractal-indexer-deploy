@@ -7,7 +7,7 @@ This repository deploys the Fractal node and related indexing services:
 - `fractal-indexer/`: Fractal BRC20 indexer and query API. Key files: `docker-compose.yaml`, `scripts/init.sh`, `conf/indexer/*.yaml`.
 - `stake-indexer/`: stake data indexer backed by PostgreSQL and Redis. Key files: `docker-compose.yaml`, `scripts/init.sh`, `conf/indexer/*.yaml`.
 - `proof-publisher/`: optional proof submission daemon. Key files: `docker-compose.yaml`, `scripts/init.sh`, `config.example.json`.
-- `scripts/`: top-level deployment helpers, including `deploy.sh`, `check-env.sh`, `install-deps.sh`, `restore-kopia-snapshot.sh`, `mount-kopia-snapshot.sh`, and `cleanup.sh`.
+- `scripts/`: top-level deployment helpers, including `deploy.sh`, `check-env.sh`, `install-deps.sh`, `restore-kopia-snapshot.sh`, `mount-kopia-snapshot.sh`, `retag-kopia-snapshots.sh`, and `cleanup.sh`.
 
 Runtime data and logs are created under each service directory, for example
 `fractald/data/`, `fractal-indexer/data/`, `fractal-indexer/logs/`, and
@@ -18,19 +18,24 @@ local configs environment-specific.
 Use `scripts/deploy.sh` for full deployments and service-local Compose files for
 manual work.
 
-- `scripts/deploy.sh --snapshot=1820067`: fresh snapshot deployment.
-- `scripts/deploy.sh --snapshot=latest`: deploy the highest complete snapshot height.
-- `scripts/deploy.sh --snapshot=1820067 --download-only`: restore snapshot data and exit before service startup.
+- `scripts/deploy.sh --snapshot=latest`: recommended one-command snapshot restore and deployment.
+- `scripts/deploy.sh --snapshot=1820067`: fresh snapshot deployment at a fixed height.
+- `scripts/deploy.sh --snapshot=latest --download-only`: restore snapshot data and exit before service startup.
 - `scripts/deploy.sh --snapshot=1820067 --yes`: deploy with automatic warning confirmation.
 - `scripts/check-env.sh --snapshot=1820067`: check dependencies, ports, memory, disk, and data directories.
 - `scripts/install-deps.sh`: install missing deployment dependencies.
 - `scripts/restore-kopia-snapshot.sh --height=1820067 --dataset=fractald-blocks --target=fractald/data/blocks`: restore one dataset.
 - `scripts/mount-kopia-snapshot.sh 1820067 snapshot/1820067`: mount snapshot datasets; requires FUSE to be installed manually.
+- `scripts/retag-kopia-snapshots.sh --height=1827202`: shallow-restore existing snapshots and upload new records with the current `dbschema` tag.
 - `scripts/cleanup.sh --stop`: stop all services.
 - `scripts/cleanup.sh --data`: stop services and delete runtime data after typing `data`.
 - `scripts/cleanup.sh --all`: stop services and delete runtime data, logs, generated configs, and Kopia cache after typing `all`.
 - `cd fractal-indexer && bash ./scripts/init.sh db`: initialize indexer tables before a non-snapshot first start.
 - `docker compose ps` and `docker compose logs --tail=100 -f`: check health and troubleshoot startup from a service directory.
+
+Snapshot restore and upload scripts use strict snapshot schema matching through
+`SNAPSHOT_SCHEMA_VERSION`, currently `dbschema:v1`. Keep restore, upload, mount,
+and retag behavior aligned when changing this schema version.
 
 ## Coding Style & Naming Conventions
 YAML and shell are the primary maintained file types here. Use 2-space
@@ -52,8 +57,9 @@ starting indexers.
 All service stacks join the shared external Docker network
 `fractal-indexer-fip101-net`. Internal services should communicate through
 Docker DNS names such as `fractald`, `fractal-indexer`, `clickhouse`, `pika`,
-`postgres`, and `redis`. Do not publish RPC, ZMQ, database, or cache ports to
-the host unless explicitly required and reviewed.
+`postgres`, and `redis`. API endpoints bind to local host access by default.
+Do not publish RPC, ZMQ, database, or cache ports to the host unless explicitly
+required and reviewed.
 
 ## Commit & Pull Request Guidelines
 Use short imperative commit subjects, ideally scoped by area, for example
