@@ -59,6 +59,7 @@ For the recommended `unisat_open_api` mode, set:
 - `signing.change_address`
 - `register.reward_addr`
 - `register.name`
+- `scan.start_height`
 - `runtime.mode`: `unisat_open_api`
 - `runtime.unisat_open_api_key`
 
@@ -152,6 +153,10 @@ Use the address that matches `signing.private_key_wif` or
 `signing.private_key_hex`. If the private key cannot spend funds from
 `signing.change_address`, transaction signing or later spending will fail.
 
+Fund this address with several small UTXOs instead of a single large output. At
+least 3 spendable UTXOs is recommended so the publisher can submit proofs
+smoothly while previous transactions are still confirming.
+
 ### Reward Address
 
 `register.reward_addr` is the reward address announced when the publisher
@@ -170,6 +175,22 @@ Leave `register.indexer_id` empty for a new registration. After registration is
 confirmed, the publisher stores the indexer ID in its local SQLite database. If
 you are moving an existing registered indexer to this deployment, set the known
 ID before starting.
+
+### Scan Start Height
+
+Set `scan.start_height` to the latest Fractal chain height when you start
+`proof-publisher`.
+
+The publisher scans from this height to find blocks that need proof submission.
+Using the current height avoids replaying old ranges and keeps the first run
+focused on new proof opportunities. You can get the current height from the
+Fractal indexer API after the indexer is synced:
+
+```bash
+curl -s http://localhost:8000/brc20/bestheight
+```
+
+Use the returned height as `scan.start_height` before starting the service.
 
 ## Runtime Mode
 

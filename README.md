@@ -111,7 +111,11 @@ Review and set these fields in `config.json`:
 - `signing.change_address`: address controlled by the signing private key
 - `register.reward_addr`: address that receives indexer rewards
 - `register.name`: your indexer name
+- `scan.start_height`: latest chain height when you start proof-publisher
 - `runtime.unisat_open_api_key`: API key from UniSat Developer Center
+
+Fund `signing.change_address` with several small UTXOs. At least 3 UTXOs is
+recommended so proof submissions can continue smoothly.
 
 Get the UniSat Open API key from
 [UniSat Developer Center](https://developer.unisat.io/). Register or log in,
@@ -247,4 +251,3 @@ Check:
 1. Added one-command snapshot restore and deployment with `scripts/deploy.sh --snapshot=latest`.
 2. Updated the latest snapshot height to `1827409`.
 3. Improved network security by binding API endpoints to local access by default.
-
