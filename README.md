@@ -1,27 +1,30 @@
 # Fractal Indexer Deploy
 
-This repository provides Docker Compose deployments for Fractal network services:
+This repository helps you run a Fractal indexer and submit FIP101 proofs from
+your own indexed data.
 
-- `fractald/`: runs the Fractal node used by the indexers.
-- `fractal-indexer/`: indexes BRC20 data and exposes a query API.
-- `stake-indexer/`: indexes staking data and depends on the Fractal indexer API.
-- `proof-publisher/`: optional proof submission daemon that publishes `register` and `prove` inscriptions.
+The main deployment path is:
 
-The top-level deploy script orchestrates these stacks. Each service directory
-also contains its own Docker Compose files and initialization scripts.
+- `fractald/`: runs the Fractal node.
+- `fractal-indexer/`: indexes BRC20 data and exposes the state/query API.
+- `proof-publisher/`: registers your indexer and publishes `prove`
+  inscriptions, which submit FIP101 proofs for reward participation.
+
+The top-level deployment script prepares the node and indexer stack. The proof
+publisher must be reviewed and started manually because it holds a signing key
+and can broadcast transactions.
 
 Upstream project repositories:
 
 - `fractald`: [github.com/fractal-bitcoin/fractald-release](https://github.com/fractal-bitcoin/fractald-release)
 - `fractal-indexer`: [github.com/fractal-bitcoin/fractal-indexer](https://github.com/fractal-bitcoin/fractal-indexer)
-- `stake-indexer`: [github.com/fractal-bitcoin/stake-indexer](https://github.com/fractal-bitcoin/stake-indexer)
 - `fractal-proof-publisher`: [github.com/fractal-bitcoin/fractal-proof-publisher](https://github.com/fractal-bitcoin/fractal-proof-publisher)
 
 ## Service Endpoints
 
 - Fractal indexer API: `http://localhost:8000`
-- Stake indexer API: `http://localhost:9637`
 - Proof publisher health: `http://localhost:8080/healthz`
+- Proof publisher status: `http://localhost:8080/status`
 
 `fractald` RPC and ZMQ ports are internal-only by default and are reachable by
 containers on the shared Docker network as `fractald:10332`, `fractald:10330`,
@@ -55,19 +58,25 @@ You can use an AI agent to deploy this stack on your server. Ask the agent to:
 
 ```text
 Read https://github.com/fractal-bitcoin/fractal-indexer-deploy, install the
-required dependencies, and deploy the Fractal indexer stack with
-scripts/deploy.sh --snapshot=latest.
+required dependencies, deploy the Fractal indexer stack with
+scripts/deploy.sh --snapshot=latest, then help me configure proof-publisher.
 ```
 
 ## Quick Start
 
-Deploy from the latest snapshot:
+### 1. Deploy Fractald and Fractal Indexer
+
+Deploy `fractald` and `fractal-indexer` from the latest snapshot:
 
 ```bash
 git clone https://github.com/fractal-bitcoin/fractal-indexer-deploy
 cd fractal-indexer-deploy
 scripts/deploy.sh --snapshot=latest
 ```
+
+The deploy script creates or updates local configs, including Fractald RPC
+credentials and the Fractal indexer API address used by `proof-publisher`.
+After the indexer stack is running, configure the proof publisher manually.
 
 To redeploy from a clean state, stop services and remove runtime data first:
 
@@ -81,6 +90,46 @@ To download snapshot data only and skip service initialization/startup:
 scripts/deploy.sh --snapshot=latest --download-only
 ```
 
+### 2. Deploy Proof Publisher
+
+`proof-publisher` is the component that submits your on-chain registration and
+proof messages. It needs a funded signing wallet, a reward address, and a
+UniSat Open API key when using the default deployment mode.
+
+Open the generated config:
+
+```bash
+cd proof-publisher
+cp config.example.json config.json  # only if config.json was not generated
+```
+
+Review and set these fields in `config.json`:
+
+- `bitcoin_rpc.user` and `bitcoin_rpc.password`: from `fractald/conf/bitcoin.conf`
+- `state_api.base_url`: normally `http://fractal-indexer:8000`
+- `signing.private_key_wif`: private key for a dedicated funded publishing wallet
+- `signing.change_address`: address controlled by the signing private key
+- `register.reward_addr`: address that receives indexer rewards
+- `register.name`: your indexer name
+- `runtime.unisat_open_api_key`: API key from UniSat Developer Center
+
+Get the UniSat Open API key from
+[UniSat Developer Center](https://developer.unisat.io/). Register or log in,
+open the `Fractal Mainnet` page, and copy the `API-Key`. UniSat's reference
+documentation is at
+[docs.unisat.io/developer-support/open-api-documentation](https://docs.unisat.io/developer-support/open-api-documentation).
+
+Then start the publisher:
+
+```bash
+bash ./scripts/init.sh
+docker compose up -d
+```
+
+For detailed configuration notes, including private key handling, address
+meaning, and non-UniSat `default` mode, see
+[proof-publisher/README.md](proof-publisher/README.md).
+
 ## Manual Service Deployment
 
 For manual deployment of individual services, see the README in each service
@@ -88,28 +137,7 @@ directory:
 
 - `fractald`: [fractald/README.md](fractald/README.md)
 - `fractal-indexer`: [fractal-indexer/README.md](fractal-indexer/README.md)
-- `stake-indexer`: [stake-indexer/README.md](stake-indexer/README.md)
 - `proof-publisher`: [proof-publisher/README.md](proof-publisher/README.md)
-
-## `fractald` Deployment
-
-`fractald` is started by `scripts/deploy.sh` before the indexers. The script
-generates `fractald/conf/bitcoin.conf` with RPC credentials on first run. If
-`fractald/conf/bitcoin.conf` already exists, the script reads the existing
-`rpcuser` and `rpcpassword` and reuses them for all generated indexer configs.
-
-When deploying with `--snapshot`, the script restores the `fractald` `blocks`
-and `chainstate` datasets before starting the node, then waits until `fractald`
-RPC responds successfully.
-
-`fractald` exposes these container ports only on the shared Docker network by
-default:
-
-- RPC: `10332`
-- ZMQ raw block: `10330`
-- ZMQ raw transaction: `10331`
-
-The P2P port `10333` is published publicly by default.
 
 ## Network and Port Security
 
@@ -128,13 +156,10 @@ Internal services do not publish host ports:
 - `fractald` RPC and ZMQ: `10332`, `10330`, `10331`
 - ClickHouse: `9000`
 - Pika: `9221`
-- PostgreSQL: `5432`
-- Redis: `6379`
 
 Public endpoints bind to `127.0.0.1` by default:
 
 - Fractal indexer API: `8000`
-- Stake indexer API: `9637`
 - Proof publisher health/API: `8080`
 
 Set `BIND_HOST=0.0.0.0` only when these APIs must be reachable from outside the
@@ -160,8 +185,6 @@ Common datasets:
 - `fractald-blocks` to `fractald/data/blocks`
 - `fractald-chainstate` to `fractald/data/chainstate`
 - `fractal-indexer-data` to `fractal-indexer/data`
-- `stake-indexer-data` to `stake-indexer/data`
-
 
 ## Deploy Without Snapshots
 
@@ -171,9 +194,8 @@ You can run the deploy script without `--snapshot`:
 scripts/deploy.sh
 ```
 
-Without snapshots, `fractald` must sync from genesis, `fractal-indexer` must
-build its data from the beginning, and `stake-indexer` must build its
-PostgreSQL and Redis data from the beginning. This can take a long time.
+Without snapshots, `fractald` must sync from genesis and `fractal-indexer` must
+build its data from the beginning. This can take a long time.
 
 Before running without snapshots, consider removing the `fractald` `prune`
 configuration from `fractald/conf/bitcoin.conf` or
@@ -186,34 +208,6 @@ full index rebuild from genesis, `128 GB+` memory is recommended.
 When running without `--snapshot`, the script prints these requirements and asks
 for confirmation before continuing. Add `--yes` only when you are intentionally
 running in a non-interactive environment.
-
-## Environment Checks
-
-`scripts/check-env.sh` is run by `scripts/deploy.sh` before deployment. It
-checks:
-
-- operating system and package manager
-- sudo/root availability
-- Docker, Docker Compose, `jq`, `kopia`, `rsync`
-- memory and available disk
-- runtime data directory status
-- service port availability
-
-Snapshot deployment enforces the combined single-host requirement:
-`800 GiB+` available disk and `64 GiB+` memory.
-Non-snapshot deployment prints the heavier full-sync requirements and asks for
-confirmation.
-
-## Dependency Installation
-
-`scripts/install-deps.sh` installs missing deployment dependencies:
-
-```bash
-scripts/install-deps.sh
-```
-
-The script supports `apt-get`, `dnf`, and `yum`. It configures official Docker
-and Kopia package repositories when those tools are missing.
 
 ## Cleanup
 
@@ -231,29 +225,6 @@ scripts/cleanup.sh --all
 - `--all` stops all services and deletes runtime data, logs, generated configs,
   and the local Kopia cache. You must type `all` to confirm.
 
-## Optional Proof Publisher
-
-The proof publisher holds a signing key and can broadcast transactions, so it is
-not started by default.
-
-```bash
-cd proof-publisher
-cp config.example.json config.json
-```
-
-Edit `config.json` and set the `fractald` RPC credentials, signing key, change
-address, reward address, indexer name, and UniSat Open API key. The default
-`state_api.base_url` is `http://fractal-indexer:8000`, which points to the
-Fractal indexer API on the shared Docker network.
-
-Then start it:
-
-```bash
-bash ./scripts/init.sh
-docker compose up -d
-cd ..
-```
-
 ## Validation
 
 Use these commands after startup:
@@ -266,8 +237,8 @@ docker compose logs --tail=100 -f
 Check:
 
 - `http://localhost:8000/brc20/bestheight` for the Fractal indexer API
-- `http://localhost:9637/indexer/status` for the stake indexer API
-- `http://localhost:8080/healthz` for the optional proof publisher
+- `http://localhost:8080/healthz` for the proof publisher
+- `http://localhost:8080/status` for proof publisher status
 
 ## Changelog
 
@@ -277,13 +248,3 @@ Check:
 2. Updated the latest snapshot height to `1827409`.
 3. Improved network security by binding API endpoints to local access by default.
 
-### 20260602
-
-1. Updated `stake-indexer` to version `v0.2.0`.
-2. Updated `stake-indexer/conf/indexer/config.yaml`.
-
-
-### 20260526
-
-1. Updated `stake-indexer` to version `v0.1.1`.
-2. Updated `stake-indexer/conf/indexer/config.yaml`.

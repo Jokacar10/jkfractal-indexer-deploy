@@ -138,8 +138,6 @@ check_port_publication_security() {
   log "Checking Docker Compose port exposure"
   check_compose_public_ports "${REPO_ROOT}/fractald" fractald '10330|10331|10332'
   check_compose_public_ports "${REPO_ROOT}/fractal-indexer" fractal-indexer '9000|9221|9222'
-  check_compose_public_ports "${REPO_ROOT}/stake-indexer" stake-indexer '5432|6379|9432|9379'
-  check_compose_public_ports "${REPO_ROOT}/proof-publisher" proof-publisher '10330|10331|10332|9000|9221|9222|5432|6379'
   log "Sensitive ports stay inside Docker network ${FRACTAL_NETWORK_NAME}; public endpoints bind to BIND_HOST=${BIND_HOST:-127.0.0.1}"
 }
 
@@ -278,7 +276,7 @@ kopia_snapshot_source_path() {
 }
 
 kopia_latest_complete_snapshot_height() {
-  local required_datasets_csv="fractald-blocks,fractald-chainstate,fractal-indexer-data,stake-indexer-data"
+  local required_datasets_csv="fractald-blocks,fractald-chainstate,fractal-indexer-data"
   local height
 
   height="$(kopia_snapshot_json_by_tags "network:fractal" "role:snapshot" "dbschema:${SNAPSHOT_SCHEMA_VERSION}" \

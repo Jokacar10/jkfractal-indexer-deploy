@@ -116,9 +116,7 @@ log "Available disk under ${REPO_ROOT}: ${disk_gib} GiB"
 log "Checking runtime data directory status"
 for path in \
   "${REPO_ROOT}/fractald/data" \
-  "${REPO_ROOT}/fractal-indexer/data" \
-  "${REPO_ROOT}/stake-indexer/data" \
-  "${REPO_ROOT}/proof-publisher/data"; do
+  "${REPO_ROOT}/fractal-indexer/data"; do
   if [ -e "$path" ] && [ "$(find "$path" -mindepth 1 -maxdepth 1 2>/dev/null | head -n 1)" ]; then
     warn "${path}: exists and is not empty"
   else
@@ -127,11 +125,7 @@ for path in \
 done
 
 log "Checking service ports"
-if proof_publisher_can_start; then
-  check_ports_free 10333 8000 9637 8080
-else
-  check_ports_free 10333 8000 9637
-fi
+check_ports_free 10333 8000
 
 check_port_publication_security
 

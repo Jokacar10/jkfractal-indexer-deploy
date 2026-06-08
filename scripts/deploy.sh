@@ -35,16 +35,6 @@ Options:
                            --snapshot=<height|latest>.
   --skip-init-db           Skip fractal-indexer DB initialization.
   --yes                    Automatically confirm non-snapshot deployment warnings.
-
-Optional proof-publisher environment. If all are provided, proof-publisher
-will be started; otherwise config.json is generated but the service is not
-started:
-  PROOF_PRIVATE_KEY_WIF
-  PROOF_CHANGE_ADDRESS
-  PROOF_REWARD_ADDRESS
-  PROOF_INDEXER_NAME
-  PROOF_UNISAT_OPEN_API_KEY
-  PROOF_INDEXER_ID
 EOF
 }
 
@@ -157,11 +147,7 @@ ensure_clickhouse_data_empty_for_non_snapshot_init() {
 }
 
 log "Checking ports"
-if proof_publisher_can_start; then
-  check_ports_free 10333 8000 9637 8080
-else
-  check_ports_free 10333 8000 9637
-fi
+check_ports_free 10333 8000
 
 if [ "$force" -eq 1 ]; then
   warn "Skipping runtime data directory checks because --force was provided"
@@ -172,7 +158,6 @@ else
   log "Checking runtime data directories"
   ensure_empty_or_missing "${REPO_ROOT}/fractald/data"
   ensure_empty_or_missing "${REPO_ROOT}/fractal-indexer/data"
-  ensure_empty_or_missing "${REPO_ROOT}/stake-indexer/data"
 fi
 
 if [ "$use_snapshot" -eq 0 ] && [ "$skip_init_db" -eq 0 ]; then
@@ -199,8 +184,6 @@ fractald_info_file=""
 fractald_rpc_error_file=""
 fractal_indexer_initialized=0
 fractal_indexer_storage_started=0
-stake_indexer_initialized=0
-stake_indexer_storage_started=0
 restore_summary_file="$(mktemp)"
 fractald_info_file="$(mktemp)"
 fractald_rpc_error_file="$(mktemp)"
@@ -237,31 +220,6 @@ start_fractal_indexer_storage() {
   wait_compose_service_ready "${REPO_ROOT}/fractal-indexer" pika 120 10
   wait_compose_service_ready "${REPO_ROOT}/fractal-indexer" pika-brc20 120 10
   fractal_indexer_storage_started=1
-}
-
-initialize_stake_indexer() {
-  if [ "$stake_indexer_initialized" -eq 1 ]; then
-    return
-  fi
-
-  log "Initializing stake-indexer"
-  (
-    cd "${REPO_ROOT}/stake-indexer"
-    bash ./scripts/init.sh
-  )
-  stake_indexer_initialized=1
-}
-
-start_stake_indexer_storage() {
-  if [ "$stake_indexer_storage_started" -eq 1 ]; then
-    return
-  fi
-
-  log "Starting stake-indexer storage services"
-  run_compose "${REPO_ROOT}/stake-indexer" up -d postgres redis
-  wait_compose_service_ready "${REPO_ROOT}/stake-indexer" postgres 120 10
-  wait_compose_service_ready "${REPO_ROOT}/stake-indexer" redis 120 10
-  stake_indexer_storage_started=1
 }
 
 wait_compose_service_ready() {
@@ -397,7 +355,6 @@ if [ "$use_snapshot" -eq 1 ]; then
   restore_dataset fractald-blocks "${REPO_ROOT}/fractald/data/blocks"
   restore_dataset fractald-chainstate "${REPO_ROOT}/fractald/data/chainstate"
   restore_dataset fractal-indexer-data "${REPO_ROOT}/fractal-indexer/data"
-  restore_dataset stake-indexer-data "${REPO_ROOT}/stake-indexer/data"
 
   if [ "$download_only" -eq 1 ]; then
     cat <<EOF
@@ -414,8 +371,6 @@ EOF
 
   initialize_fractal_indexer
   start_fractal_indexer_storage
-  initialize_stake_indexer
-  start_stake_indexer_storage
 fi
 
 load_fractald_rpc_credentials() {
@@ -475,38 +430,11 @@ log "Starting fractal-indexer indexer and API"
 run_compose "${REPO_ROOT}/fractal-indexer" up -d indexer api
 wait_for_fractal_indexer_api
 
-initialize_stake_indexer
-generate_stake_indexer_chain_config "$rpc_user" "$rpc_password"
-start_stake_indexer_storage
-
-log "Starting stake-indexer"
-run_compose "${REPO_ROOT}/stake-indexer" up -d indexer
-
-log "Initializing proof-publisher config"
-(
-  cd "${REPO_ROOT}/proof-publisher"
-  bash ./scripts/init.sh
-)
-generate_proof_publisher_config "$rpc_user" "$rpc_password"
-
-if proof_publisher_can_start; then
-  log "Starting proof-publisher"
-  run_compose "${REPO_ROOT}/proof-publisher" up -d
-else
-  warn "proof-publisher config generated but service not started; signing env vars are incomplete"
-fi
-
 log "Final service status"
 printf '\n[fractald]\n'
 run_compose "${REPO_ROOT}/fractald" ps
 printf '\n[fractal-indexer]\n'
 run_compose "${REPO_ROOT}/fractal-indexer" ps
-printf '\n[stake-indexer]\n'
-run_compose "${REPO_ROOT}/stake-indexer" ps
-if proof_publisher_can_start; then
-  printf '\n[proof-publisher]\n'
-  run_compose "${REPO_ROOT}/proof-publisher" ps
-fi
 
 if [ "$use_snapshot" -eq 1 ]; then
   snapshot_summary="Restored snapshots:
@@ -522,8 +450,6 @@ cat <<EOF
 ${snapshot_summary}
 
 Fractal indexer API: http://localhost:8000
-Stake indexer API: http://localhost:9637
-Proof publisher: http://localhost:8080
 
 Docker network: ${FRACTAL_NETWORK_NAME}
 Public bind host: ${BIND_HOST:-127.0.0.1}
