@@ -1,8 +1,8 @@
 # Fractald
 
 `fractald` deploys a Fractal Bitcoin node for the local indexer stacks. It
-serves RPC and ZMQ traffic to `fractal-indexer`, `stake-indexer`, and the
-optional `proof-publisher` on the shared Docker network.
+serves RPC and ZMQ traffic to `fractal-indexer` and `proof-publisher` on the
+shared Docker network.
 
 ## Directory Layout
 

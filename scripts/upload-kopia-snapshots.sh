@@ -86,7 +86,6 @@ datasets=$(
 fractald-blocks|${UPLOAD_BASE_DIR}/fractald/data/blocks
 fractald-chainstate|${UPLOAD_BASE_DIR}/fractald/data/chainstate
 fractal-indexer-data|${UPLOAD_BASE_DIR}/fractal-indexer/data
-stake-indexer-data|${UPLOAD_BASE_DIR}/stake-indexer/data
 EOF
 )
 
@@ -106,7 +105,7 @@ if [ "$missing" -ne 0 ] && [ "${ALLOW_PARTIAL_UPLOAD:-}" != "1" ]; then
 fi
 
 if command -v docker >/dev/null 2>&1; then
-  if docker ps --format '{{.Names}}' | grep -E 'fractald|fractal-indexer|clickhouse|pika|stake-indexer|postgres|redis' >/dev/null 2>&1; then
+  if docker ps --format '{{.Names}}' | grep -E 'fractald|fractal-indexer|clickhouse|pika' >/dev/null 2>&1; then
     warn "related containers appear to be running; hot snapshots may be inconsistent"
   fi
 fi

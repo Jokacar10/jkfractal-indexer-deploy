@@ -5,14 +5,13 @@ This repository deploys the Fractal node and related indexing services:
 
 - `fractald/`: Fractal node. Key files: `docker-compose.yaml`, `scripts/init.sh`, `conf/bitcoin.conf.example`.
 - `fractal-indexer/`: Fractal BRC20 indexer and query API. Key files: `docker-compose.yaml`, `scripts/init.sh`, `conf/indexer/*.yaml`.
-- `stake-indexer/`: stake data indexer backed by PostgreSQL and Redis. Key files: `docker-compose.yaml`, `scripts/init.sh`, `conf/indexer/*.yaml`.
 - `proof-publisher/`: optional proof submission daemon. Key files: `docker-compose.yaml`, `scripts/init.sh`, `config.example.json`.
 - `scripts/`: top-level deployment helpers, including `deploy.sh`, `check-env.sh`, `install-deps.sh`, `restore-kopia-snapshot.sh`, `mount-kopia-snapshot.sh`, `retag-kopia-snapshots.sh`, and `cleanup.sh`.
 
 Runtime data and logs are created under each service directory, for example
-`fractald/data/`, `fractal-indexer/data/`, `fractal-indexer/logs/`, and
-`stake-indexer/data/`. Treat example config files as templates and keep generated
-local configs environment-specific.
+`fractald/data/`, `fractal-indexer/data/`, and `fractal-indexer/logs/`.
+Treat example config files as templates and keep generated local configs
+environment-specific.
 
 ## Build, Test, and Development Commands
 Use `scripts/deploy.sh` for full deployments and service-local Compose files for

@@ -66,7 +66,6 @@ stop_stack() {
 
 stop_all() {
   stop_stack proof-publisher "${REPO_ROOT}/proof-publisher"
-  stop_stack stake-indexer "${REPO_ROOT}/stake-indexer"
   stop_stack fractal-indexer "${REPO_ROOT}/fractal-indexer"
   stop_stack fractald "${REPO_ROOT}/fractald"
   log "All services stopped"
@@ -117,7 +116,6 @@ case "$mode" in
     remove_paths \
       "${REPO_ROOT}/fractald/data" \
       "${REPO_ROOT}/fractal-indexer/data" \
-      "${REPO_ROOT}/stake-indexer/data" \
       "${REPO_ROOT}/proof-publisher/data"
     log "Runtime data cleanup completed"
     ;;
@@ -127,15 +125,12 @@ case "$mode" in
     remove_paths \
       "${REPO_ROOT}/fractald/data" \
       "${REPO_ROOT}/fractal-indexer/data" \
-      "${REPO_ROOT}/stake-indexer/data" \
       "${REPO_ROOT}/proof-publisher/data" \
       "${REPO_ROOT}/fractal-indexer/logs" \
-      "${REPO_ROOT}/stake-indexer/logs" \
       "${REPO_ROOT}/proof-publisher/logs" \
       "${REPO_ROOT}/.kopia-cache" \
       "${REPO_ROOT}/fractald/conf/bitcoin.conf" \
       "${REPO_ROOT}/fractal-indexer/conf/indexer/chain.yaml" \
-      "${REPO_ROOT}/stake-indexer/conf/indexer/chain.yaml" \
       "${REPO_ROOT}/proof-publisher/config.json"
     log "Full cleanup completed"
     ;;

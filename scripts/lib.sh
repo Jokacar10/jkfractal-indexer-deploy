@@ -429,17 +429,6 @@ generate_fractal_indexer_chain_config() {
     "{REPLACE_RPC_PASSWORD}" "$rpc_password"
 }
 
-generate_stake_indexer_chain_config() {
-  local rpc_user="$1"
-  local rpc_password="$2"
-  local template="${REPO_ROOT}/stake-indexer/conf/indexer/chain.yaml.example"
-  local target="${REPO_ROOT}/stake-indexer/conf/indexer/chain.yaml"
-
-  generate_from_template "$template" "$target" \
-    "{REPLACE_RPC_USER}" "$rpc_user" \
-    "{REPLACE_RPC_PASSWORD}" "$rpc_password"
-}
-
 generate_proof_publisher_config() {
   local rpc_user="$1"
   local rpc_password="$2"
