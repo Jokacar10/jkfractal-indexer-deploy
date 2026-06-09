@@ -31,7 +31,7 @@
     "indexer_id": "REPLACE_EXISTING_INDEXER_ID_OR_EMPTY"
   },
   "scan": {
-    "start_height": 1764000,
+    "start_height": REPLACE_START_HEIGHT,
     "poll_interval": 30000000000,
     "target_block_version": 539361536,
     "required_confirmations": 1,
