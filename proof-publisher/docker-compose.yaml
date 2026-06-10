@@ -1,6 +1,6 @@
 services:
   proof-publisher:
-    image: fractalbitcoin/fractal-proof-publisher:v0.1.0
+    image: fractalbitcoin/fractal-proof-publisher:v0.1.1
     restart: unless-stopped
     init: true
     user: "10001:10001"
