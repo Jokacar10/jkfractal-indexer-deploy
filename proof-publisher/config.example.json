@@ -8,7 +8,16 @@
   "signing": {
     "private_key_wif": "REPLACE_PRIVATE_KEY_WIF",
     "change_address": "REPLACE_CHANGE_ADDRESS",
-    "initial_utxos": []
+    "initial_utxos": [
+      {
+        "txid": "REPLACE_UTXO_TXID",
+        "vout": 0,
+        "amount_sat": 100000,
+        "address": "REPLACE_UTXO_ADDRESS",
+        "script_pub_key": "REPLACE_UTXO_SCRIPT_PUB_KEY",
+        "address_type": "p2wpkh"
+      }
+    ]
   },
   "state_api": {
     "base_url": "http://fractal-indexer:8000",
@@ -44,9 +53,9 @@
     "sqlite_path": "/app/data/publisher.db"
   },
   "runtime": {
-    "mode": "unisat_open_api",
+    "mode": "default" OR "unisat_open_api",
     "unisat_open_api_url": "https://open-api-fractal.unisat.io",
-    "unisat_open_api_key": "REPLACE_UNISAT_OPEN_API_KEY",
+    "unisat_open_api_key": "REQUIRED_ONLY_WHEN_MODE_IS_UNISAT_OPEN_API",
     "dry_run": false,
     "disable_broadcast": false,
     "health_addr": ":8080"

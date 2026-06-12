@@ -26,6 +26,7 @@ and Fractal indexer API are running.
 - A funded publishing wallet private key and its change address
 - A reward address for indexer registration
 - A UniSat Open API key when using `runtime.mode: "unisat_open_api"`
+- Spendable wallet UTXO details in `signing.initial_utxos` when using default mode
 
 The default compose file expects Fractald and the Fractal indexer API to be
 attached to the shared external Docker network `fractal-indexer-fip101-net`.
@@ -49,9 +50,10 @@ cp config.example.json config.json  # only if config.json does not already exist
 
 `scripts/deploy.sh` can generate `proof-publisher/config.json` with the Fractald
 RPC credentials and Fractal indexer API address. You still need to review and
-set the signing wallet, reward address, indexer name, and UniSat Open API key.
+set the signing wallet, reward address, indexer name, scan start height, and the
+runtime-mode-specific fields.
 
-For the recommended `unisat_open_api` mode, set:
+Common required values for both modes:
 
 - `bitcoin_rpc.user`
 - `bitcoin_rpc.password`
@@ -60,8 +62,22 @@ For the recommended `unisat_open_api` mode, set:
 - `register.reward_addr`
 - `register.name`
 - `scan.start_height`
+
+For the recommended `unisat_open_api` mode, also set:
+
 - `runtime.mode`: `unisat_open_api`
+- `runtime.unisat_open_api_url`: normally `https://open-api.unisat.io`
 - `runtime.unisat_open_api_key`
+
+For default mode, set:
+
+- `runtime.mode`: `default` or leave it empty
+- `signing.initial_utxos`: at least one spendable UTXO controlled by the
+  publishing private key
+
+Default mode does not require `runtime.unisat_open_api_key`. It broadcasts
+commit/reveal transactions through Fractald RPC, so the Fractald RPC account
+must allow `sendrawtransaction`.
 
 If the indexer is already registered, set `register.indexer_id` to the existing
 value. If it is empty, the publisher creates a `register` submission before
@@ -127,6 +143,31 @@ Reference documentation:
 
 You can paste the raw API key. The publisher normalizes it to Bearer token
 format internally.
+
+### Default Mode Initial UTXOs
+
+Default mode does not query UniSat for spendable outputs. Before startup, fill
+`signing.initial_utxos` with one or more currently unspent outputs from
+`signing.change_address` or another address controlled by the publishing private
+key:
+
+```json
+"initial_utxos": [
+  {
+    "txid": "REPLACE_TXID",
+    "vout": 0,
+    "amount_sat": 100000,
+    "address": "REPLACE_UTXO_ADDRESS",
+    "script_pub_key": "REPLACE_SCRIPT_PUB_KEY",
+    "address_type": "p2wpkh"
+  }
+]
+```
+
+`script_pub_key` must match the exact output script for that UTXO, and
+`address_type` must match the funded address type, such as `p2wpkh`, `p2tr`,
+`p2sh-p2wpkh`, or `p2pkh`. Do not list UTXOs that are already spent, reserved by
+another publisher instance, or not controlled by the configured private key.
 
 ### Publishing Private Key
 

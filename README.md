@@ -93,8 +93,9 @@ scripts/deploy.sh --snapshot=latest --download-only
 ### 2. Deploy Proof Publisher
 
 `proof-publisher` is the component that submits your on-chain registration and
-proof messages. It needs a funded signing wallet, a reward address, and a
-UniSat Open API key when using the default deployment mode.
+proof messages. It needs a funded signing wallet, a reward address, and either a
+UniSat Open API key for `unisat_open_api` mode or explicit spendable UTXO details
+for default mode.
 
 Open the generated config:
 
@@ -103,7 +104,7 @@ cd proof-publisher
 cp config.example.json config.json  # only if config.json was not generated
 ```
 
-Review and set these fields in `config.json`:
+Review and set these common fields in `config.json`:
 
 - `bitcoin_rpc.user` and `bitcoin_rpc.password`: from `fractald/conf/bitcoin.conf`
 - `state_api.base_url`: normally `http://fractal-indexer:8000`
@@ -112,12 +113,29 @@ Review and set these fields in `config.json`:
 - `register.reward_addr`: address that receives indexer rewards
 - `register.name`: your indexer name
 - `scan.start_height`: latest chain height when you start proof-publisher
+
+For the recommended `unisat_open_api` mode, also set:
+
+- `runtime.mode`: `unisat_open_api`
+- `runtime.unisat_open_api_url`: normally `https://open-api.unisat.io`
 - `runtime.unisat_open_api_key`: API key from UniSat Developer Center
 
-Fund `signing.change_address` with several small UTXOs. At least 3 UTXOs is
-recommended so proof submissions can continue smoothly.
+For default mode, set:
 
-Get the UniSat Open API key from
+- `runtime.mode`: `default` or leave it empty
+- `signing.initial_utxos`: at least one spendable UTXO controlled by the
+  publishing private key
+
+Default mode does not require `runtime.unisat_open_api_key`. It uses Fractald
+RPC `sendrawtransaction` to broadcast commit/reveal transactions, so make sure
+the configured Fractald RPC account can broadcast transactions.
+
+Fund `signing.change_address` with several small UTXOs. At least 3 UTXOs is
+recommended so proof submissions can continue smoothly. In default mode, list
+one or more of those unspent outputs in `signing.initial_utxos`, including
+`txid`, `vout`, `amount_sat`, `address`, `script_pub_key`, and `address_type`.
+
+When using `unisat_open_api` mode, get the UniSat Open API key from
 [UniSat Developer Center](https://developer.unisat.io/). Register or log in,
 open the `Fractal Mainnet` page, and copy the `API-Key`. UniSat's reference
 documentation is at
@@ -245,6 +263,12 @@ Check:
 - `http://localhost:8080/status` for proof publisher status
 
 ## Changelog
+
+### 20260612
+
+1. Documented Proof Publisher `default` mode alongside `unisat_open_api` mode.
+2. Added default-mode `signing.initial_utxos` guidance for manual Fractald RPC broadcasting.
+3. Upgraded `fractalbitcoin/fractal-proof-publisher` to `v0.1.2`.
 
 ### 20260606
 
