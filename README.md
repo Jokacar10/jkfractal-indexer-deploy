@@ -263,6 +263,8 @@ Check:
 - `http://localhost:8080/status` for proof publisher status
 
 ## Changelog
+### 20260623
+1. Updated the `fractal-indexer` `db.yaml` configuration, adjusting `read_timeout` and `write_timeout` to 60 seconds.
 
 ### 20260612
 
@@ -275,3 +277,4 @@ Check:
 1. Added one-command snapshot restore and deployment with `scripts/deploy.sh --snapshot=latest`.
 2. Updated the latest snapshot height to `1827409`.
 3. Improved network security by binding API endpoints to local access by default.
+

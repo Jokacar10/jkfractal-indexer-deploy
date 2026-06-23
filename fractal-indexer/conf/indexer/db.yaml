@@ -17,8 +17,8 @@ max_execution_time: 3600
 # connection timeout in seconds.
 connection_timeout: 30
 # Read timeout in seconds.
-read_timeout: 10
+read_timeout: 60
 # Write timeout in seconds.
-write_timeout: 10
+write_timeout: 60
 # Debug enabled.
 debug: false
