@@ -15,7 +15,7 @@ FRACTAL_INDEXER_API_CHECK_DELAY_SECONDS=5
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/deploy.sh [--snapshot=<height|latest>] [--download-only] [--force] [--skip-init-db] [--yes]
+  scripts/deploy.sh [--snapshot=<height|latest>] [--download-only] [--force] [--skip-init-db] [--skip-checks=memory,disk] [--yes]
 
 Snapshot restore environment:
   AWS_ACCESS_KEY_ID       Read-only Cloudflare R2 access key; defaults to bundled read-only key
@@ -34,6 +34,8 @@ Options:
                            initializing configs or starting services. Requires
                            --snapshot=<height|latest>.
   --skip-init-db           Skip fractal-indexer DB initialization.
+  --skip-checks=<list>     Downgrade selected machine requirement failures to
+                           warnings. Supported values: memory,disk.
   --yes                    Automatically confirm non-snapshot deployment warnings.
 EOF
 }
@@ -43,7 +45,32 @@ force=0
 skip_init_db=0
 assume_yes=0
 download_only=0
+skip_checks=""
 original_args=("$@")
+
+validate_skip_checks() {
+  local value="$1"
+  local item
+  local -a items
+
+  if [ -z "$value" ]; then
+    usage_error "--skip-checks requires at least one value"
+  fi
+
+  IFS=',' read -r -a items <<<"$value"
+  for item in "${items[@]}"; do
+    case "$item" in
+      memory|disk)
+        ;;
+      "")
+        usage_error "--skip-checks contains an empty value"
+        ;;
+      *)
+        usage_error "unsupported --skip-checks value: $item"
+        ;;
+    esac
+  done
+}
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -58,6 +85,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --skip-init-db)
       skip_init_db=1
+      ;;
+    --skip-checks=*)
+      skip_checks="${1#--skip-checks=}"
+      validate_skip_checks "$skip_checks"
       ;;
     --yes)
       assume_yes=1
@@ -97,6 +128,9 @@ fi
 check_env_args=()
 if [ "$assume_yes" -eq 1 ]; then
   check_env_args+=(--yes)
+fi
+if [ -n "$skip_checks" ]; then
+  check_env_args+=(--skip-checks="$skip_checks")
 fi
 log "Installing missing deployment dependencies"
 bash "${SCRIPT_DIR}/install-deps.sh"
@@ -263,6 +297,10 @@ fractald_blocks_from_info() {
   jq -r '(.blocks // 0) | tonumber' "$fractald_info_file"
 }
 
+fractald_pruneheight_from_info() {
+  jq -r '(.pruneheight // 0) | tonumber' "$fractald_info_file"
+}
+
 wait_for_fractald_rpc() {
   local attempt
 
@@ -409,11 +447,11 @@ run_compose "${REPO_ROOT}/fractald" up -d
 
 wait_for_fractald_rpc
 
-node_height="$(fractald_blocks_from_info)"
-log "fractald height: ${node_height}"
+node_pruneheight="$(fractald_pruneheight_from_info)"
+log "fractald pruneheight: ${node_pruneheight}"
 
-if [ "$use_snapshot" -eq 1 ] && [ "$node_height" -lt "$snapshot_height" ]; then
-  die "fractald height ${node_height} is below requested snapshot height ${snapshot_height}"
+if [ "$use_snapshot" -eq 1 ] && [ "$node_pruneheight" -gt "$snapshot_height" ]; then
+  die "fractald pruneheight (${node_pruneheight}) exceeds snapshot height (${snapshot_height})"
 fi
 
 if [ "$use_snapshot" -eq 0 ] && [ "$skip_init_db" -eq 0 ]; then

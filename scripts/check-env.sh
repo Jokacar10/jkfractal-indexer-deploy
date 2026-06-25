@@ -12,23 +12,58 @@ SNAPSHOT_MIN_MEM_GIB=64
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/check-env.sh [--snapshot=<height>] [--yes]
+  scripts/check-env.sh [--snapshot=<height>] [--skip-checks=memory,disk] [--yes]
 
 Checks the deployment environment before running deploy.sh.
 
 Options:
   --snapshot=<height>    Check resource requirements for snapshot deployment.
+  --skip-checks=<list>   Downgrade selected machine requirement failures to
+                         warnings. Supported values: memory,disk.
   --yes                  Confirm non-snapshot deployment warnings automatically.
 EOF
 }
 
 snapshot_height=""
 assume_yes=0
+skip_memory_check=0
+skip_disk_check=0
+
+parse_skip_checks() {
+  local value="$1"
+  local item
+  local -a items
+
+  if [ -z "$value" ]; then
+    usage_error "--skip-checks requires at least one value"
+  fi
+
+  IFS=',' read -r -a items <<<"$value"
+  for item in "${items[@]}"; do
+    case "$item" in
+      memory)
+        skip_memory_check=1
+        ;;
+      disk)
+        skip_disk_check=1
+        ;;
+      "")
+        usage_error "--skip-checks contains an empty value"
+        ;;
+      *)
+        usage_error "unsupported --skip-checks value: $item"
+        ;;
+    esac
+  done
+}
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --snapshot=*)
       snapshot_height="${1#--snapshot=}"
+      ;;
+    --skip-checks=*)
+      parse_skip_checks "${1#--skip-checks=}"
       ;;
     --yes)
       assume_yes=1
@@ -130,14 +165,29 @@ check_ports_free 10333 8000
 check_port_publication_security
 
 if [ -n "$snapshot_height" ]; then
+  snapshot_resource_warnings=0
   log "Snapshot resource requirement for single-host, same-disk deployment: disk ${SNAPSHOT_MIN_DISK_GIB} GiB+, memory ${SNAPSHOT_MIN_MEM_GIB} GiB+"
   if [ "$disk_gib" -lt "$SNAPSHOT_MIN_DISK_GIB" ]; then
-    die "snapshot deployment requires at least ${SNAPSHOT_MIN_DISK_GIB} GiB available disk; current: ${disk_gib} GiB"
+    if [ "$skip_disk_check" -eq 1 ]; then
+      warn "snapshot deployment requires at least ${SNAPSHOT_MIN_DISK_GIB} GiB available disk; current: ${disk_gib} GiB; continuing because disk is listed in --skip-checks"
+      snapshot_resource_warnings=1
+    else
+      die "snapshot deployment requires at least ${SNAPSHOT_MIN_DISK_GIB} GiB available disk; current: ${disk_gib} GiB"
+    fi
   fi
   if [ "$mem_gib" -lt "$SNAPSHOT_MIN_MEM_GIB" ]; then
-    die "snapshot deployment requires at least ${SNAPSHOT_MIN_MEM_GIB} GiB memory; current: ${mem_gib} GiB"
+    if [ "$skip_memory_check" -eq 1 ]; then
+      warn "snapshot deployment requires at least ${SNAPSHOT_MIN_MEM_GIB} GiB memory; current: ${mem_gib} GiB; continuing because memory is listed in --skip-checks"
+      snapshot_resource_warnings=1
+    else
+      die "snapshot deployment requires at least ${SNAPSHOT_MIN_MEM_GIB} GiB memory; current: ${mem_gib} GiB"
+    fi
   fi
-  log "Snapshot resource check passed for height ${snapshot_height}"
+  if [ "$snapshot_resource_warnings" -eq 1 ]; then
+    warn "Snapshot resource requirement warnings were allowed for height ${snapshot_height}"
+  else
+    log "Snapshot resource check passed for height ${snapshot_height}"
+  fi
 else
   cat >&2 <<'EOF'
 
