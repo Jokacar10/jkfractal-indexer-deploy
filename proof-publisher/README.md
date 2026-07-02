@@ -233,6 +233,32 @@ curl -s http://localhost:8000/brc20/bestheight
 
 Use the returned height as `scan.start_height` before starting the service.
 
+### Fee Rate Selection
+
+The publisher selects a fee rate from `fee_api.strategy` and then clamps it with
+`fee_api.min_fee_rate_sat_vb` and `fee_api.max_fee_rate_sat_vb`.
+
+Supported `fee_api.strategy` values:
+
+- `fastest`: use the fastest recommended fee.
+- `hour` or `hourfee`: use the one-hour recommended fee.
+- `minimum` or `min`: use the minimum recommended fee.
+- `half_hour`, `halfhour`, `half-hour`, or an empty value: use the half-hour
+  recommended fee.
+- Any unknown value also falls back to the half-hour recommended fee.
+
+After the strategy selects a candidate fee rate:
+
+1. If it is lower than `fee_api.min_fee_rate_sat_vb`, the minimum value is used.
+2. If `fee_api.max_fee_rate_sat_vb` is greater than `0` and the candidate is
+   higher than that maximum, the maximum value is used.
+3. If the final value is still `0` or negative, the publisher uses `1 sat/vB`.
+
+For a fixed-fee deployment, set `fee_api.min_fee_rate_sat_vb` and
+`fee_api.max_fee_rate_sat_vb` to the same positive value. For example, the
+example config sets both to `1`, so the final fee rate is capped and floored at
+`1 sat/vB` regardless of the recommended fee source.
+
 ## Runtime Mode
 
 ### Recommended: `unisat_open_api`

@@ -26,11 +26,12 @@
     "provider": "query-fip101"
   },
   "fee_api": {
+    "base_url": "https://mempool.fractalbitcoin.io",
     "timeout": 5000000000,
-    "strategy": "minimum",
+    "strategy": "halfhour",
     "min_fee_rate_sat_vb": 1,
-    "max_fee_rate_sat_vb": 1,
-    "fixed_fee_rate_sat_vb": 1
+    "max_fee_rate_sat_vb": 0,
+    "fixed_fee_rate_sat_vb": 0
   },
   "register": {
     "index_ratio_bp": 100,

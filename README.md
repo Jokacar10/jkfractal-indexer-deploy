@@ -263,6 +263,13 @@ Check:
 - `http://localhost:8080/status` for proof publisher status
 
 ## Changelog
+
+### 20260702
+
+1. Upgraded `fractalbitcoin/fractal-proof-publisher` to `v0.1.3`, including improved proof resubmission logic after block reorganizations and UTXO selection from largest to smallest.
+2. Updated Proof Publisher fee defaults to use the Fractal mempool fee API with `halfhour` strategy and no maximum fee cap.
+3. Documented Proof Publisher fee-rate strategy selection, min/max clamping, and `1 sat/vB` fallback behavior.
+
 ### 20260623
 1. Updated the `fractal-indexer` `db.yaml` configuration, adjusting `read_timeout` and `write_timeout` to 60 seconds.
 
