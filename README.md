@@ -94,8 +94,8 @@ scripts/deploy.sh --snapshot=latest --download-only
 
 `proof-publisher` is the component that submits your on-chain registration and
 proof messages. It needs a funded signing wallet, a reward address, and either a
-UniSat Open API key for `unisat_open_api` mode or explicit spendable UTXO details
-for default mode.
+UniSat Open API key for `unisat_open_api` mode or default-mode UTXO sourcing via
+manual `signing.initial_utxos` or `runtime.local_utxo_open_api_refill`.
 
 Open the generated config:
 
@@ -124,18 +124,25 @@ For default mode, set:
 
 - `runtime.mode`: `default` or leave it empty
 - `signing.initial_utxos`: at least one spendable UTXO controlled by the
-  publishing private key
+  publishing private key, unless `runtime.local_utxo_open_api_refill` is enabled
+- `runtime.local_utxo_open_api_refill`: optional; set to `true` to refill the
+  local UTXO ledger from UniSat Open API
 
-Default mode does not require `runtime.unisat_open_api_key`. It uses Fractald
-RPC `sendrawtransaction` to broadcast commit/reveal transactions, so make sure
-the configured Fractald RPC account can broadcast transactions.
+Default mode uses Fractald RPC `sendrawtransaction` to broadcast commit/reveal
+transactions, so make sure the configured Fractald RPC account can broadcast
+transactions. If `runtime.local_utxo_open_api_refill` is enabled,
+`runtime.unisat_open_api_url` and `runtime.unisat_open_api_key` are required.
 
 Fund `signing.change_address` with several small UTXOs. At least 3 UTXOs is
-recommended so proof submissions can continue smoothly. In default mode, list
-one or more of those unspent outputs in `signing.initial_utxos`, including
-`txid`, `vout`, `amount_sat`, `address`, `script_pub_key`, and `address_type`.
+recommended so proof submissions can continue smoothly. In default mode without
+Open API refill, list one or more of those unspent outputs in
+`signing.initial_utxos`, including `txid`, `vout`, `amount_sat`, `address`,
+`script_pub_key`, and `address_type`. With Open API refill enabled, the publisher
+can populate its local UTXO ledger from UniSat Open API for
+`signing.change_address`.
 
-When using `unisat_open_api` mode, get the UniSat Open API key from
+When using `unisat_open_api` mode, or default mode with
+`runtime.local_utxo_open_api_refill` enabled, get the UniSat Open API key from
 [UniSat Developer Center](https://developer.unisat.io/). Register or log in,
 open the `Fractal Mainnet` page, and copy the `API-Key`. UniSat's reference
 documentation is at
@@ -263,6 +270,12 @@ Check:
 - `http://localhost:8080/status` for proof publisher status
 
 ## Changelog
+
+### 20260722
+
+1. Upgraded `fractalbitcoin/fractal-proof-publisher` to `v0.1.4`.
+2. Added `runtime.local_utxo_open_api_refill` guidance for default mode, allowing local UTXO ledger refill from UniSat Open API when manual `signing.initial_utxos` are missing or insufficient.
+3. Documented `v0.1.4` recovery improvements for resilient broadcast handling, suspect UTXO refresh through Fractald RPC `gettxout`, and preserving reserved UTXOs during Open API refill.
 
 ### 20260702
 

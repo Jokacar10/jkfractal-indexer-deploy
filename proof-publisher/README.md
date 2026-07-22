@@ -15,8 +15,8 @@ and Fractal indexer API are running.
 - Publishes `prove` inscriptions for eligible block heights.
 - Reads state hashes from the local Fractal indexer API.
 - Signs commit/reveal transactions with the configured publishing wallet.
-- Broadcasts transactions through UniSat Open API in the default deployment
-  mode, or through Fractald RPC in advanced default mode.
+- Broadcasts transactions through UniSat Open API in `unisat_open_api` mode, or
+  through Fractald RPC in default mode.
 - Stores local progress in SQLite under `data/`.
 
 ## Dependencies
@@ -26,7 +26,9 @@ and Fractal indexer API are running.
 - A funded publishing wallet private key and its change address
 - A reward address for indexer registration
 - A UniSat Open API key when using `runtime.mode: "unisat_open_api"`
-- Spendable wallet UTXO details in `signing.initial_utxos` when using default mode
+- Manual `signing.initial_utxos` when using default mode without Open API refill
+- A UniSat Open API key when using default mode with
+  `runtime.local_utxo_open_api_refill: true`
 
 The default compose file expects Fractald and the Fractal indexer API to be
 attached to the shared external Docker network `fractal-indexer-fip101-net`.
@@ -73,11 +75,15 @@ For default mode, set:
 
 - `runtime.mode`: `default` or leave it empty
 - `signing.initial_utxos`: at least one spendable UTXO controlled by the
-  publishing private key
+  publishing private key, unless `runtime.local_utxo_open_api_refill` is enabled
+- `runtime.local_utxo_open_api_refill`: optional; set to `true` to let the
+  publisher refill its local UTXO ledger from UniSat Open API
 
-Default mode does not require `runtime.unisat_open_api_key`. It broadcasts
-commit/reveal transactions through Fractald RPC, so the Fractald RPC account
-must allow `sendrawtransaction`.
+Default mode broadcasts commit/reveal transactions through Fractald RPC, so the
+Fractald RPC account must allow `sendrawtransaction`. If
+`runtime.local_utxo_open_api_refill` is `false`, UniSat Open API credentials are
+not required. If it is `true`, `runtime.unisat_open_api_url` and
+`runtime.unisat_open_api_key` are required for UTXO refill only.
 
 If the indexer is already registered, set `register.indexer_id` to the existing
 value. If it is empty, the publisher creates a `register` submission before
@@ -127,8 +133,10 @@ GET /brc20/statehash?start={height}&end={height}
 
 ### UniSat Open API Key
 
-The recommended deployment mode uses UniSat Open API for UTXO lookup and
-transaction broadcast.
+`unisat_open_api` mode uses UniSat Open API for UTXO lookup and transaction
+broadcast. Default mode also needs UniSat Open API credentials when
+`runtime.local_utxo_open_api_refill` is `true`, but still broadcasts
+commit/reveal transactions through Fractald RPC.
 
 To get the key:
 
@@ -144,12 +152,15 @@ Reference documentation:
 You can paste the raw API key. The publisher normalizes it to Bearer token
 format internally.
 
-### Default Mode Initial UTXOs
+### Default Mode UTXO Sources
 
-Default mode does not query UniSat for spendable outputs. Before startup, fill
-`signing.initial_utxos` with one or more currently unspent outputs from
-`signing.change_address` or another address controlled by the publishing private
-key:
+Default mode can use either manually configured UTXOs or automatic local-ledger
+refill from UniSat Open API.
+
+For a fully local default-mode setup, keep `runtime.local_utxo_open_api_refill`
+set to `false` and fill `signing.initial_utxos` before startup with one or more
+currently unspent outputs from `signing.change_address` or another address
+controlled by the publishing private key:
 
 ```json
 "initial_utxos": [
@@ -168,6 +179,24 @@ key:
 `address_type` must match the funded address type, such as `p2wpkh`, `p2tr`,
 `p2sh-p2wpkh`, or `p2pkh`. Do not list UTXOs that are already spent, reserved by
 another publisher instance, or not controlled by the configured private key.
+
+For default mode with automatic refill, set:
+
+```json
+"runtime": {
+  "mode": "default",
+  "unisat_open_api_url": "https://open-api.unisat.io",
+  "unisat_open_api_key": "REPLACE_UNISAT_OPEN_API_KEY",
+  "local_utxo_open_api_refill": true
+}
+```
+
+With `runtime.local_utxo_open_api_refill: true`, the publisher can refill its
+local UTXO ledger from UniSat Open API for `signing.change_address`. This is
+useful when the local ledger has no usable UTXO or has insufficient funds. The
+service keeps reserved UTXOs intact, restores non-reserved spendable entries from
+Open API, and checks suspect UTXOs with Fractald RPC `gettxout` before deciding
+whether they are available again or invalid.
 
 ### Publishing Private Key
 
@@ -255,9 +284,10 @@ After the strategy selects a candidate fee rate:
 3. If the final value is still `0` or negative, the publisher uses `1 sat/vB`.
 
 For a fixed-fee deployment, set `fee_api.min_fee_rate_sat_vb` and
-`fee_api.max_fee_rate_sat_vb` to the same positive value. For example, the
-example config sets both to `1`, so the final fee rate is capped and floored at
-`1 sat/vB` regardless of the recommended fee source.
+`fee_api.max_fee_rate_sat_vb` to the same positive value. The example config uses
+`fee_api.strategy: "halfhour"`, `fee_api.min_fee_rate_sat_vb: 1`, and
+`fee_api.max_fee_rate_sat_vb: 0`, so the selected recommended fee is floored at
+`1 sat/vB` without an upper cap.
 
 ## Runtime Mode
 
@@ -288,8 +318,13 @@ An empty value, `default`, or any other string uses default mode.
 
 In default mode:
 
-- `runtime.unisat_open_api_key` is not required.
-- `signing.initial_utxos` must contain at least one spendable UTXO.
+- `runtime.unisat_open_api_key` is not required when
+  `runtime.local_utxo_open_api_refill` is `false`.
+- `signing.initial_utxos` must contain at least one spendable UTXO when
+  `runtime.local_utxo_open_api_refill` is `false`.
+- `runtime.local_utxo_open_api_refill: true` allows the publisher to refill its
+  local UTXO ledger from UniSat Open API, and requires
+  `runtime.unisat_open_api_url` plus `runtime.unisat_open_api_key`.
 - Commit and reveal transactions are broadcast with Fractald RPC
   `sendrawtransaction`.
 - Commit and reveal confirmations are detected by scanning blocks through

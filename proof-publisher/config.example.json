@@ -55,8 +55,9 @@
   },
   "runtime": {
     "mode": "default" OR "unisat_open_api",
-    "unisat_open_api_url": "https://open-api-fractal.unisat.io",
-    "unisat_open_api_key": "REQUIRED_ONLY_WHEN_MODE_IS_UNISAT_OPEN_API",
+    "unisat_open_api_url": "https://open-api.unisat.io",
+    "unisat_open_api_key": "REQUIRED_WHEN_MODE_IS_UNISAT_OPEN_API_OR_LOCAL_UTXO_OPEN_API_REFILL_IS_TRUE",
+    "local_utxo_open_api_refill": false,
     "dry_run": false,
     "disable_broadcast": false,
     "health_addr": ":8080"
